@@ -17,3 +17,14 @@ export function downloadScreenshot(filename: string) {
     URL.revokeObjectURL(url)
   }, 'image/png')
 }
+
+let viewReset: (() => void) | null = null
+
+export function setViewReset(fn: (() => void) | null) {
+  viewReset = fn
+}
+
+/** Put the camera back to its starting position and framing. */
+export function resetView() {
+  viewReset?.()
+}

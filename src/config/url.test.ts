@@ -7,14 +7,14 @@ const custom: BeltConfig = {
   size: '4.5',
   width: 5,
   waist: 100,
-  build: 'heavy',
   texts: [
-    { text: '山田 太郎', tail: 'r', color: 'gin', weight: 5, font: 'brush' },
-    { text: 'カラテ', tail: 'r', color: '1079', weight: 1, font: 'gothic' },
+    { text: '山田 太郎', color: 'gin', weight: 5, charWidth: 'half' },
+    { text: 'カラテ', color: '1079', weight: 1, charWidth: 'full' },
   ],
   logo: false,
   logoTail: 'l',
-  chest: { show: true, text: '剛柔流', font: 'gothic' },
+  chest: { show: true, text: '剛柔流', size: 65 },
+  hem: { show: true, text: '山田', label: false },
 }
 
 describe('url config', () => {
@@ -36,7 +36,7 @@ describe('url config', () => {
   })
 
   it('falls back per field for invalid values', () => {
-    const decoded = decodeConfig('?c=chartreuse&s=8&w=6&wa=-80&b=huge&t1s=x&t1w=9&t1f=comic&t1c=gold&lg=maybe&lgs=up&k=yes&kf=x')
+    const decoded = decodeConfig('?c=chartreuse&s=8&w=6&wa=-80&t1w=9&t1h=quarter&t1c=gold&lg=maybe&lgs=up&k=yes&ks=33&hm=2&hmc=nope&hml=x')
     expect(decoded).toEqual(DEFAULT_CONFIG)
   })
 

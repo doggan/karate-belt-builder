@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { THREAD_COLORS, threadColor, type ThreadColorId } from '../config/schema'
 import { useUiStore, type SectionId } from '../uiStore'
 
 /** How long a section or field stays highlighted after a click in the 3D view (ms). */
@@ -121,5 +122,100 @@ export function Toggle({ label, checked, onChange }: { label: string; checked: b
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span>{label}</span>
     </label>
+  )
+}
+
+/**
+ * Compact thread-color picker: a button showing the current swatch and catalog code,
+ * opening a scrollable list of every color with its code. (A native <select> can't
+ * show color swatches.)
+ */
+export function ThreadSelect({ id, value, onChange }: { id: string; value: ThreadColorId; onChange: (id: ThreadColorId) => void }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const listRef = useRef<HTMLUListElement>(null)
+  const current = threadColor(value)
+
+  useEffect(() => {
+    if (!open) return
+    const selected = listRef.current?.querySelector<HTMLElement>('[aria-selected="true"]')
+    selected?.focus({ preventScroll: true })
+    selected?.scrollIntoView({ block: 'nearest' })
+    const onPointerDown = (e: PointerEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [open])
+
+  const choose = (color: ThreadColorId) => {
+    onChange(color)
+    setOpen(false)
+    buttonRef.current?.focus()
+  }
+
+  const onListKeyDown = (e: KeyboardEvent<HTMLUListElement>) => {
+    const options = Array.from(listRef.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])
+    const i = options.indexOf(document.activeElement as HTMLElement)
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      const next = options[Math.min(options.length - 1, Math.max(0, i + (e.key === 'ArrowDown' ? 1 : -1)))]
+      next?.focus()
+      next?.scrollIntoView({ block: 'nearest' })
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      const color = options[i]?.dataset.color as ThreadColorId | undefined
+      if (color) choose(color)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setOpen(false)
+      buttonRef.current?.focus()
+    } else if (e.key === 'Tab') {
+      setOpen(false)
+    }
+  }
+
+  return (
+    <div className="thread-select" ref={rootRef}>
+      <button
+        ref={buttonRef}
+        id={id}
+        type="button"
+        className="thread-select-button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && !open) {
+            e.preventDefault()
+            setOpen(true)
+          }
+        }}
+      >
+        <span className="thread-dot" style={{ background: current.hex }} />
+        <span className="thread-code">{current.label}</span>
+        <span className="thread-chevron" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <ul ref={listRef} role="listbox" aria-labelledby={id} className="thread-select-list" onKeyDown={onListKeyDown}>
+          {THREAD_COLORS.map((c) => (
+            <li
+              key={c.id}
+              role="option"
+              tabIndex={-1}
+              aria-selected={c.id === value}
+              data-color={c.id}
+              onClick={() => choose(c.id)}
+            >
+              <span className="thread-dot" style={{ background: c.hex }} />
+              <span className="thread-code">{c.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   )
 }

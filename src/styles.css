@@ -42,6 +42,20 @@ body {
   touch-action: none;
 }
 
+.view-reset {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  color: var(--text);
+  cursor: pointer;
+}
+
 .panel {
   background: var(--panel);
   border-left: 1px solid var(--border);
@@ -206,6 +220,77 @@ input[type='range'] {
   height: 18px;
   accent-color: var(--accent);
   margin: 0;
+}
+
+.thread-select {
+  position: relative;
+}
+
+.thread-select-button {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--panel);
+  cursor: pointer;
+  text-align: left;
+}
+
+.thread-dot {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+}
+
+.thread-code {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.thread-chevron {
+  color: var(--muted);
+}
+
+.thread-select-list {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.thread-select-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.thread-select-list li:hover,
+.thread-select-list li:focus {
+  background: var(--bg);
+  outline: none;
+}
+
+.thread-select-list li[aria-selected='true'] {
+  font-weight: 600;
 }
 
 .swatches.small {

@@ -155,6 +155,51 @@ export function buildFaceStrip(frames: Frame[], width: number, offset: number): 
   return mb.build()
 }
 
+/** Copy fresh vertex data into an existing geometry with the same topology (for per-frame animation). */
+function copyVertexData(target: THREE.BufferGeometry, fresh: THREE.BufferGeometry) {
+  for (const name of ['position', 'normal', 'uv']) {
+    const dst = target.getAttribute(name) as THREE.BufferAttribute
+    ;(dst.array as Float32Array).set(fresh.getAttribute(name).array as Float32Array)
+    dst.needsUpdate = true
+  }
+  fresh.dispose()
+}
+
+/** Re-pose a ribbon built by `buildRibbon` with the same number of frames. */
+export function updateRibbon(target: THREE.BufferGeometry, frames: Frame[], width: number, thickness: number, uLength: number) {
+  copyVertexData(target, buildRibbon(frames, width, thickness, false, uLength))
+}
+
+/** Re-pose a face strip built by `buildFaceStrip` with the same number of frames. */
+export function updateFaceStrip(target: THREE.BufferGeometry, frames: Frame[], width: number, offset: number) {
+  copyVertexData(target, buildFaceStrip(frames, width, offset))
+}
+
+/** Frames along a curve; `across` is held as close as possible to `acrossHint`, and `out` = tangent × across. */
+export function curveFrames(points: THREE.Vector3[], acrossHint: THREE.Vector3): Frame[] {
+  return points.map((p, i) => {
+    const prev = points[Math.max(0, i - 1)]
+    const next = points[Math.min(points.length - 1, i + 1)]
+    const dir = next.clone().sub(prev).normalize()
+    const across = acrossHint.clone().addScaledVector(dir, -acrossHint.dot(dir)).normalize()
+    const out = new THREE.Vector3().crossVectors(dir, across).normalize()
+    return { p: p.clone(), across, out }
+  })
+}
+
+/** Frames for a hanging tail from its particle positions; the face stays turned toward +Z (no twist). */
+export function framesFromPoints(points: THREE.Vector3[]): Frame[] {
+  const forward = new THREE.Vector3(0, 0, 1)
+  return points.map((p, i) => {
+    const prev = points[Math.max(0, i - 1)]
+    const next = points[Math.min(points.length - 1, i + 1)]
+    const dir = next.clone().sub(prev).normalize()
+    const out = forward.clone().addScaledVector(dir, -forward.dot(dir)).normalize()
+    const across = new THREE.Vector3().crossVectors(out, dir).normalize()
+    return { p: p.clone(), across, out }
+  })
+}
+
 /** Frames around a horizontal ellipse at height y; θ = 0 is the front (+Z). */
 export function ellipseFrames(a: number, b: number, y: number, segments: number): Frame[] {
   const frames: Frame[] = []

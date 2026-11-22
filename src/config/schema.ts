@@ -47,16 +47,10 @@ export type BeltWidthCm = (typeof BELT_WIDTHS)[number]
 
 // ── Body ────────────────────────────────────────────────────────────────────
 
-/** Waist circumference over the jacket, in cm. */
-export const WAIST_SIZES = [60, 70, 80, 90, 100, 110, 120] as const
-export type WaistCm = (typeof WAIST_SIZES)[number]
-
-export const BUILDS = [
-  { id: 'slim', label: 'Slim' },
-  { id: 'average', label: 'Average' },
-  { id: 'heavy', label: 'Heavy' },
-] as const
-export type BuildId = (typeof BUILDS)[number]['id']
+/** Waist circumference over the jacket, in cm (slider steps). */
+export const WAIST_MIN_CM = 60
+export const WAIST_MAX_CM = 120
+export type WaistCm = number
 
 // ── Embroidery ──────────────────────────────────────────────────────────────
 
@@ -111,14 +105,23 @@ export type TextWeight = (typeof TEXT_WEIGHTS)[number]
 /** Tails as seen from the front: 'l' is the viewer's left. */
 export type TailSide = 'l' | 'r'
 export const TAIL_SIDES: readonly TailSide[] = ['l', 'r']
+/** Index into `BeltConfig.texts` for each tail. */
+export const tailIndex = (side: TailSide): 0 | 1 => (side === 'l' ? 0 : 1)
 
+/** Embroidery on one tail. */
 export interface TailText {
   text: string
-  tail: TailSide
   color: ThreadColorId
   weight: TextWeight
-  font: FontId
+  /** 'half': each character takes half the length along the tail (squeezed), for compact text. */
+  charWidth: CharWidth
 }
+
+export const CHAR_WIDTHS = [
+  { id: 'full', label: 'Full width' },
+  { id: 'half', label: 'Half width' },
+] as const
+export type CharWidth = (typeof CHAR_WIDTHS)[number]['id']
 
 /** Hard cap so a hand-crafted link can't make an absurd texture; not a UX limit. */
 export const MAX_TEXT_LENGTH = 40
@@ -126,12 +129,27 @@ export const MAX_TEXT_LENGTH = 40
 /** A generic (fictional) brand label, black and red, sewn near the end of a tail. */
 export const BRAND_LABEL = { mark: '武', name: 'BUDŌ', black: '#141414', red: '#c0262e' } as const
 
-/** Chest embroidery: black kanji stitched directly on the jacket, reading vertically. */
-export const CHEST_THREAD_HEX = '#141414'
+/** Black thread for embroidery stitched on the jacket (chest and hem). */
+export const BLACK_THREAD_HEX = '#141414'
+/** All embroidery (tails and chest) uses the brush font. */
+export const EMBROIDERY_FONT: FontId = 'brush'
+/** Height of one chest character, in mm (slider steps). */
+export const CHEST_SIZES_MM = [30, 35, 40, 45, 50, 55, 60, 65, 70] as const
+export type ChestSizeMm = (typeof CHEST_SIZES_MM)[number]
 export interface ChestKanji {
   show: boolean
   text: string
-  font: FontId
+  size: ChestSizeMm
+}
+
+/**
+ * Hem embroidery: black text written vertically up the front edge of the overlapping
+ * panel (where the jacket closes), starting just above the bottom hem; optional brand label.
+ */
+export interface HemEmbroidery {
+  show: boolean
+  text: string
+  label: boolean
 }
 
 // ── Config ──────────────────────────────────────────────────────────────────
@@ -141,26 +159,28 @@ export interface BeltConfig {
   size: BeltSizeId
   width: BeltWidthCm
   waist: WaistCm
-  build: BuildId
+  /** Embroidery on the [left, right] tail. */
   texts: [TailText, TailText]
   logo: boolean
   logoTail: TailSide
   chest: ChestKanji
+  hem: HemEmbroidery
 }
 
 export const DEFAULT_CONFIG: BeltConfig = {
   color: 'black',
-  size: '3',
+  /** Size 5 is for ~180 cm wearers, matching the ~180 cm dogi model. */
+  size: '5',
   width: 4,
-  waist: 80,
-  build: 'average',
+  waist: 85,
   texts: [
-    { text: '空手道', tail: 'l', color: '436', weight: 3, font: 'mincho' },
-    { text: '', tail: 'r', color: '436', weight: 3, font: 'mincho' },
+    { text: '空手道', color: '436', weight: 3, charWidth: 'full' },
+    { text: '', color: '436', weight: 3, charWidth: 'full' },
   ],
   logo: true,
   logoTail: 'r',
-  chest: { show: false, text: '空手道', font: 'mincho' },
+  chest: { show: false, text: '空手道', size: 50 },
+  hem: { show: false, text: '空手道', label: true },
 }
 
 // ── Lookups ─────────────────────────────────────────────────────────────────

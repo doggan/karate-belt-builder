@@ -2,14 +2,15 @@ import {
   BELT_COLORS,
   BELT_SIZES,
   BELT_WIDTHS,
-  BUILDS,
+  CHEST_SIZES_MM,
   DEFAULT_CONFIG,
-  FONTS,
+  CHAR_WIDTHS,
   MAX_TEXT_LENGTH,
   TAIL_SIDES,
   TEXT_WEIGHTS,
   THREAD_COLORS,
-  WAIST_SIZES,
+  WAIST_MAX_CM,
+  WAIST_MIN_CM,
   type BeltConfig,
   type TailText,
 } from './schema'
@@ -19,11 +20,12 @@ import {
  *
  *   v     schema version
  *   c     belt color id          s   belt size id (e.g. 3, 3.5)
- *   w     belt width (cm)        wa  waist (cm)        b   build id
- *   t1    text 1                 t1s tail (l|r)  t1c thread color  t1w weight 1–5  t1f font id
- *   t2…   text 2 (same keys)
+ *   w     belt width (cm)        wa  waist (cm)
+ *   t1    left-tail text   t1c thread color  t1w weight 1–5  t1h character width (full|half)
+ *   t2…   right-tail text (same keys)
  *   lg    brand label shown (1|0)   lgs label tail (l|r)
- *   k     chest kanji shown (1|0)   kt  text   kf font id
+ *   k     chest kanji shown (1|0)   kt  text   ks character size (mm)
+ *   hm    hem embroidery shown (1|0)  hmt text  hml brand label (1|0)
  *
  * Every field is validated on its own, so an old, hand-edited or truncated link
  * still renders something sensible. Keys present with an empty value (e.g. `t1=`)
@@ -40,20 +42,21 @@ export function encodeConfig(config: BeltConfig): string {
   p.set('s', config.size)
   p.set('w', String(config.width))
   p.set('wa', String(config.waist))
-  p.set('b', config.build)
   config.texts.forEach((t, i) => {
     const k = `t${i + 1}`
     p.set(k, t.text)
-    p.set(`${k}s`, t.tail)
     p.set(`${k}c`, t.color)
     p.set(`${k}w`, String(t.weight))
-    p.set(`${k}f`, t.font)
+    p.set(`${k}h`, t.charWidth)
   })
   p.set('lg', config.logo ? '1' : '0')
   p.set('lgs', config.logoTail)
   p.set('k', config.chest.show ? '1' : '0')
   p.set('kt', config.chest.text)
-  p.set('kf', config.chest.font)
+  p.set('ks', String(config.chest.size))
+  p.set('hm', config.hem.show ? '1' : '0')
+  p.set('hmt', config.hem.text)
+  p.set('hml', config.hem.label ? '1' : '0')
   return p.toString()
 }
 
@@ -64,15 +67,19 @@ export function decodeConfig(search: string): BeltConfig {
     color: oneOf(p.get('c'), ids(BELT_COLORS), d.color),
     size: oneOf(p.get('s'), ids(BELT_SIZES), d.size),
     width: intOneOf(p.get('w'), BELT_WIDTHS, d.width),
-    waist: intOneOf(p.get('wa'), WAIST_SIZES, d.waist),
-    build: oneOf(p.get('b'), ids(BUILDS), d.build),
+    waist: intInRange(p.get('wa'), WAIST_MIN_CM, WAIST_MAX_CM, d.waist),
     texts: [decodeText(p, 1, d.texts[0]), decodeText(p, 2, d.texts[1])],
     logo: bool(p.get('lg'), d.logo),
     logoTail: oneOf(p.get('lgs'), TAIL_SIDES, d.logoTail),
     chest: {
       show: bool(p.get('k'), d.chest.show),
       text: text(p.get('kt'), d.chest.text),
-      font: oneOf(p.get('kf'), ids(FONTS), d.chest.font),
+      size: intOneOf(p.get('ks'), CHEST_SIZES_MM, d.chest.size),
+    },
+    hem: {
+      show: bool(p.get('hm'), d.hem.show),
+      text: text(p.get('hmt'), d.hem.text),
+      label: bool(p.get('hml'), d.hem.label),
     },
   }
 }
@@ -81,15 +88,20 @@ function decodeText(p: URLSearchParams, n: number, fallback: TailText): TailText
   const k = `t${n}`
   return {
     text: text(p.get(k), fallback.text),
-    tail: oneOf(p.get(`${k}s`), TAIL_SIDES, fallback.tail),
     color: oneOf(p.get(`${k}c`), ids(THREAD_COLORS), fallback.color),
     weight: intOneOf(p.get(`${k}w`), TEXT_WEIGHTS, fallback.weight),
-    font: oneOf(p.get(`${k}f`), ids(FONTS), fallback.font),
+    charWidth: oneOf(p.get(`${k}h`), ids(CHAR_WIDTHS), fallback.charWidth),
   }
 }
 
 function oneOf<T extends string>(raw: string | null, allowed: readonly T[], fallback: T): T {
   return raw !== null && (allowed as readonly string[]).includes(raw) ? (raw as T) : fallback
+}
+
+function intInRange(raw: string | null, min: number, max: number, fallback: number): number {
+  if (raw === null || !/^\d+$/.test(raw)) return fallback
+  const n = Number(raw)
+  return n >= min && n <= max ? n : fallback
 }
 
 function intOneOf<T extends number>(raw: string | null, allowed: readonly T[], fallback: T): T {

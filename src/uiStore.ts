@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type { TailSide } from './config/schema'
 
 /** Control panel sections; also the "parts" you can click in the 3D view. */
-export type SectionId = 'belt' | 'embroidery' | 'label' | 'chest' | 'body'
+export type SectionId = 'belt' | 'embroidery' | 'label' | 'chest' | 'hem' | 'body'
 
 interface UiStore {
   /** The one open accordion section (null = all collapsed). */
