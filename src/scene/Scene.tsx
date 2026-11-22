@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { Canvas } from '@react-three/fiber'
 import { ContactShadows, Environment, Lightformer, OrbitControls } from '@react-three/drei'
-import { beltColor } from '../config/schema'
 import { useBeltStore } from '../store'
 import { Belt } from './Belt'
 import { Mannequin } from './Mannequin'
@@ -31,8 +30,8 @@ export function Scene() {
         <Lightformer form="rect" intensity={1} position={[3, 1.5, -1]} rotation-y={-Math.PI / 2} scale={[3, 2, 1]} />
       </Environment>
 
-      <Mannequin body={layout.body} />
-      <Belt layout={layout} color={beltColor(config.color).hex} />
+      <Mannequin body={layout.body} config={config} />
+      <Belt layout={layout} config={config} />
 
       <ContactShadows position={[0, 0, 0]} scale={3} blur={2.5} opacity={0.45} far={1.5} />
 

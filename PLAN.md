@@ -45,9 +45,11 @@ BeltConfig
   width      4 | 5                (cm)
   waist      waist preset         (cm; drives mannequin + how long the tails hang)
   -- phase 2 --
-  texts[]    { tail: 'left'|'right', text, color, weight }
-  logo       { id, tail } | none
-  patch      preset id | none     (chest, upper left)
+  build      'slim'|'average'|'heavy'  (waist cross-section + torso profile)
+  stitching  derived from width (10 rows @ 4cm, 12 @ 5cm; later: preset per brand)
+  texts      [TailText, TailText]   { text, tail: 'l'|'r', color, weight 1–5, font }
+  logo       preset id | 'none',  logoTail 'l'|'r'
+  patch      style id | 'none',   patchText
 ```
 
 ### URL format (`src/config/url.ts`)
@@ -90,17 +92,25 @@ BeltConfig
 - [x] Responsive panel (side panel on desktop, bottom sheet on mobile)
 - [x] Unit tests for URL encode/decode
 
-### Phase 2: Customization
-- [ ] Canvas-texture text on either tail (kanji/katakana), per-text color and stroke weight
-- [ ] Japanese font loading
-- [ ] Preset (fictional) brand label on a tail
-- [ ] Kanji patch on the upper left of the chest (drei `Decal` on the jacket)
-- [ ] Extend the URL schema (bump to `v=2` only if a breaking change is needed)
+### Phase 2: Customization ✅
+- [x] **Belt stitching**: parallel lines of stitching running the length of the belt (Shureido-style belts have ~10 rows across the width).
+  - Draw the stitch pattern procedurally on a canvas → normal map + subtle color map on the belt (wrap, tails and knot). No image assets needed.
+  - The row count, stitch length and thread tone depend on the width (4cm vs 5cm). Make them presets so different "brands" can differ later.
+  - Build this first: it creates the canvas-texture pipeline that the tail text reuses.
+- [x] **Body build**: change the waist shape to simulate a slim vs heavy build.
+  - The waist circumference preset already exists. Add a build control that also changes the cross-section (belly depth vs width, flatter vs rounder) and the hip/chest profile, so the belt visibly sits differently, not just bigger.
+  - Belt wrap and tail length keep being computed from the actual waist perimeter, so a heavier build automatically means shorter tails.
+  - New URL field (e.g. `b=slim|average|heavy`); older links default to `average`.
+- [x] Canvas-texture text on either tail (kanji/katakana): two text slots, each with tail, thread color, stroke weight (1–5) and font (Mincho / Gothic / Brush)
+- [x] Japanese font loading (Google Fonts unicode-range slices; canvases redraw when glyphs arrive)
+- [x] Preset (fictional) brand label on a tail: Tora / Kazedo / Yamako
+- [x] Kanji patch on the wearer's upper left chest (drei `Decal`), 4 styles + custom text
+- [x] Extended the URL schema (still `v=1`; new keys are optional and default when missing)
 
 ### Phase 3: Realism
 - [ ] Real dogi model (Blender → glTF, Draco/meshopt compressed), jacket lapels, sleeves, skirt
 - [ ] Modeled square knot
-- [ ] Materials: cotton vs satin belts (`MeshPhysicalMaterial` sheen), parallel stitch-row normal map, canvas-weave normal map for the dogi
+- [ ] Materials: cotton vs satin belts (`MeshPhysicalMaterial` sheen), canvas-weave normal map for the dogi (stitch rows move to phase 2)
 - [ ] Belt variants: stripe, colored tips, two-tone (red/white, red/black), dan bars
 - [ ] Color calibration against photos of real belts + disclaimer
 
@@ -110,8 +120,20 @@ BeltConfig
 - [ ] Camera presets (front / side / tails close-up)
 - [ ] Optional text-length clamping / auto-fit
 
+## Belt sizes
+Shureido sizes by wearer height are official: 00 = 110 cm, 0 = 120, 1 = 130, 1½ = 140, 2 = 150, 2½ = 155,
+3 = 160, 3½ = 165, 4 = 170, 4½ = 175, 5 = 180, 5½ = 185, 6 = 190.
+Belt **lengths** are not published by Shureido. We use a retailer chart (size 1 = 215 cm, +10 cm per half
+size, so 6 = 315 cm), extended down to 00 = 175 cm. Replace with real numbers when available
+(`BELT_SIZES` in `src/config/schema.ts`).
+
 ## Open questions
-- Exact belt size → length table (the current values are approximate and vary by maker).
+- Exact Shureido belt lengths per size (see above).
+- The mannequin is a fixed ~180 cm tall regardless of belt size. Should it scale to the size's wearer height?
+- Knot allowance (5.5 × belt width) is a guess; tune against a real tied belt so tail lengths match photos.
+- Long text currently runs up the tail and under the knot (by design for now). Decide on clamping/auto-fit.
+- Body build: three presets (current), or a continuous slider? Build keeps the waist measurement fixed and changes shape, so "heavy" usually also wants a bigger waist.
+- Stitching: currently tone-on-tone. Add a contrast thread option?
 - Should waist size be a user-facing control or derived from belt size? (Currently a control.)
 - Embroidery fonts: which styles to offer (block/mincho vs brush), and their licenses.
 - Which way the text reads on each tail when worn (orientation convention).
