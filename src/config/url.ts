@@ -22,8 +22,8 @@ import {
  *   w     belt width (cm)        wa  waist (cm)        b   build id
  *   t1    text 1                 t1s tail (l|r)  t1c thread color  t1w weight 1–5  t1f font id
  *   t2…   text 2 (same keys)
- *   lg    brand label shown (1|0)
- *   k     chest kanji shown (1|0)  kt text  kc thread color  kf font id
+ *   lg    brand label shown (1|0)   lgs label tail (l|r)
+ *   k     chest kanji shown (1|0)   kt  text   kf font id
  *
  * Every field is validated on its own, so an old, hand-edited or truncated link
  * still renders something sensible. Keys present with an empty value (e.g. `t1=`)
@@ -50,9 +50,9 @@ export function encodeConfig(config: BeltConfig): string {
     p.set(`${k}f`, t.font)
   })
   p.set('lg', config.logo ? '1' : '0')
+  p.set('lgs', config.logoTail)
   p.set('k', config.chest.show ? '1' : '0')
   p.set('kt', config.chest.text)
-  p.set('kc', config.chest.color)
   p.set('kf', config.chest.font)
   return p.toString()
 }
@@ -68,10 +68,10 @@ export function decodeConfig(search: string): BeltConfig {
     build: oneOf(p.get('b'), ids(BUILDS), d.build),
     texts: [decodeText(p, 1, d.texts[0]), decodeText(p, 2, d.texts[1])],
     logo: bool(p.get('lg'), d.logo),
+    logoTail: oneOf(p.get('lgs'), TAIL_SIDES, d.logoTail),
     chest: {
       show: bool(p.get('k'), d.chest.show),
       text: text(p.get('kt'), d.chest.text),
-      color: oneOf(p.get('kc'), ids(THREAD_COLORS), d.chest.color),
       font: oneOf(p.get('kf'), ids(FONTS), d.chest.font),
     },
   }

@@ -15,6 +15,10 @@ export interface EmbroideryArt {
   dispose: () => void
 }
 
+/** Brand label placement on a tail: gap from the tail end (m), and label length as a multiple of belt width. */
+export const LABEL_END_MARGIN = 0.025
+export const LABEL_LENGTH_PER_WIDTH = 1.12
+
 /** Pixels per meter of belt. */
 const PPM = 5000
 const MAX_CANVAS = 4096
@@ -115,11 +119,11 @@ export function drawTailArt(opts: {
   const texts = opts.texts.filter((t) => t.text.trim())
   const empty = texts.length === 0 && !opts.logo
 
-  let cursor = H - 0.025 * ppm // bottom of the free space, moving up
+  let cursor = H - LABEL_END_MARGIN * ppm // bottom of the free space, moving up
 
   if (opts.logo) {
     const lw = W * 0.84
-    const lh = W * 1.12
+    const lh = W * LABEL_LENGTH_PER_WIDTH
     const lx = (W - lw) / 2
     const ly = cursor - lh
     drawLabel(cc, lx, ly, lw, lh, false)

@@ -9,7 +9,7 @@ on a white dogi in 3D, then share that exact customization as a link.
 |---|---|
 | Body | Placeholder mannequin for now; real dogi model later |
 | Logos | Fictional/generic brand labels only — no real trademarks |
-| User uploads | None. All images (logos, patches) are presets referenced by id |
+| User uploads | None. The brand label is a built-in generic design |
 | Text | Kanji/katakana only (no romaji yet). User picks which tail each text goes on |
 | Text length | Unclamped for now; text expands along the tail. Revisit later |
 | Platform | Desktop Chrome first, but layout and performance must work on mobile |
@@ -48,8 +48,8 @@ BeltConfig
   build      'slim'|'average'|'heavy'  (waist cross-section + torso profile)
   stitching  derived from width (10 rows @ 4cm, 12 @ 5cm; later: preset per brand)
   texts      [TailText, TailText]   { text, tail: 'l'|'r', color, weight 1–5, font }
-  logo       preset id | 'none',  logoTail 'l'|'r'
-  patch      style id | 'none',   patchText
+  logo       boolean,  logoTail 'l'|'r'
+  chest      { show, text, font }  (black vertical kanji on the wearer's left chest)
 ```
 
 ### URL format (`src/config/url.ts`)
@@ -103,9 +103,15 @@ BeltConfig
   - New URL field (e.g. `b=slim|average|heavy`); older links default to `average`.
 - [x] Canvas-texture text on either tail (kanji/katakana): two text slots, each with tail, thread color, stroke weight (1–5) and font (Mincho / Gothic / Brush)
 - [x] Japanese font loading (Google Fonts unicode-range slices; canvases redraw when glyphs arrive)
-- [x] Preset (fictional) brand label on a tail: Tora / Kazedo / Yamako
-- [x] Kanji patch on the wearer's upper left chest (drei `Decal`), 4 styles + custom text
+- [x] Generic black/red brand label, show/hide
+- [x] Vertical chest kanji on the wearer's upper left chest (drei `Decal`), Shureido thread colors
 - [x] Extended the URL schema (still `v=1`; new keys are optional and default when missing)
+
+### Phase 2.5: Usability ✅
+- [x] Accordion control panel (one section open at a time; collapsed sections show a summary of their values)
+- [x] Click a part of the 3D model to open its section: belt wrap/knot → Belt, tail → Tail embroidery
+  (flashes that tail's text, or moves a free text slot there), brand label → Brand label,
+  upper jacket front → Chest kanji, rest of body → Body. Drags (camera rotation) don't count as clicks.
 
 ### Phase 3: Realism
 - [ ] Real dogi model (Blender → glTF, Draco/meshopt compressed), jacket lapels, sleeves, skirt
@@ -120,15 +126,18 @@ BeltConfig
 - [ ] Camera presets (front / side / tails close-up)
 - [ ] Optional text-length clamping / auto-fit
 
-## Belt sizes
-Shureido sizes by wearer height are official: 00 = 110 cm, 0 = 120, 1 = 130, 1½ = 140, 2 = 150, 2½ = 155,
-3 = 160, 3½ = 165, 4 = 170, 4½ = 175, 5 = 180, 5½ = 185, 6 = 190.
-Belt **lengths** are not published by Shureido. We use a retailer chart (size 1 = 215 cm, +10 cm per half
-size, so 6 = 315 cm), extended down to 00 = 175 cm. Replace with real numbers when available
-(`BELT_SIZES` in `src/config/schema.ts`).
+## Shureido reference data
+- **Belt sizes (official):** 00 = 190 cm, 0 = 200, 1 = 210, 1½ = 220, 2 = 230, 2½ = 240, 3 = 250, 3½ = 260,
+  4 = 270, 4½ = 280, 5 = 290, 5½ = 300, 6 = 310, 6½ = 320, 7 = 330. Recommended wearer height is published
+  for 00–6 (110–190 cm).
+- **Embroidery threads (official catalog):** 白, 銀, 68, 69, 72, 10, 8, 114, 44, 43, 180, 2, 1, 39, 436, 53, 83,
+  854, 856, 314, 387, 182, 816, 1079, 202, 244, 27, 28, 137. Hex values were sampled from Shureido's swatch
+  photo, so they are approximate (camera sheen makes the whites and pale tints read a little bright).
+- **Belt colors offered:** white, yellow, green, brown, black.
+- **Brand label:** one generic black/red label (fictional), show/hide, on either tail.
+- **Chest:** black kanji embroidered directly on the jacket (5 cm characters), one vertical column, font choice. No patch.
 
 ## Open questions
-- Exact Shureido belt lengths per size (see above).
 - The mannequin is a fixed ~180 cm tall regardless of belt size. Should it scale to the size's wearer height?
 - Knot allowance (5.5 × belt width) is a guess; tune against a real tied belt so tail lengths match photos.
 - Long text currently runs up the tail and under the knot (by design for now). Decide on clamping/auto-fit.

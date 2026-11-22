@@ -123,15 +123,14 @@ export interface TailText {
 /** Hard cap so a hand-crafted link can't make an absurd texture; not a UX limit. */
 export const MAX_TEXT_LENGTH = 40
 
-/** A generic (fictional) brand label, black and red, sewn near the end of the right tail. */
+/** A generic (fictional) brand label, black and red, sewn near the end of a tail. */
 export const BRAND_LABEL = { mark: '武', name: 'BUDŌ', black: '#141414', red: '#c0262e' } as const
-export const BRAND_LABEL_TAIL: TailSide = 'r'
 
-/** Chest embroidery: kanji stitched directly on the jacket, reading vertically. */
+/** Chest embroidery: black kanji stitched directly on the jacket, reading vertically. */
+export const CHEST_THREAD_HEX = '#141414'
 export interface ChestKanji {
   show: boolean
   text: string
-  color: ThreadColorId
   font: FontId
 }
 
@@ -145,6 +144,7 @@ export interface BeltConfig {
   build: BuildId
   texts: [TailText, TailText]
   logo: boolean
+  logoTail: TailSide
   chest: ChestKanji
 }
 
@@ -159,7 +159,8 @@ export const DEFAULT_CONFIG: BeltConfig = {
     { text: '', tail: 'r', color: '436', weight: 3, font: 'mincho' },
   ],
   logo: true,
-  chest: { show: false, text: '空手道', color: '10', font: 'mincho' },
+  logoTail: 'r',
+  chest: { show: false, text: '空手道', font: 'mincho' },
 }
 
 // ── Lookups ─────────────────────────────────────────────────────────────────

@@ -13,7 +13,8 @@ const custom: BeltConfig = {
     { text: 'カラテ', tail: 'r', color: '1079', weight: 1, font: 'gothic' },
   ],
   logo: false,
-  chest: { show: true, text: '剛柔流', color: '137', font: 'gothic' },
+  logoTail: 'l',
+  chest: { show: true, text: '剛柔流', font: 'gothic' },
 }
 
 describe('url config', () => {
@@ -35,7 +36,7 @@ describe('url config', () => {
   })
 
   it('falls back per field for invalid values', () => {
-    const decoded = decodeConfig('?c=chartreuse&s=8&w=6&wa=-80&b=huge&t1s=x&t1w=9&t1f=comic&t1c=gold&lg=maybe&k=yes&kc=999')
+    const decoded = decodeConfig('?c=chartreuse&s=8&w=6&wa=-80&b=huge&t1s=x&t1w=9&t1f=comic&t1c=gold&lg=maybe&lgs=up&k=yes&kf=x')
     expect(decoded).toEqual(DEFAULT_CONFIG)
   })
 

@@ -1,11 +1,14 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { RoundedBox } from '@react-three/drei'
-import { BRAND_LABEL, BRAND_LABEL_TAIL, beltColor, type BeltConfig, type TailSide } from '../config/schema'
+import type { ThreeEvent } from '@react-three/fiber'
+import { BRAND_LABEL, beltColor, type BeltConfig, type TailSide } from '../config/schema'
+import { useUiStore } from '../uiStore'
 import type { BeltLayout } from './beltLayout'
 import { WAIST_Y } from './beltLayout'
-import { drawTailArt } from './embroidery'
+import { drawTailArt, LABEL_END_MARGIN, LABEL_LENGTH_PER_WIDTH } from './embroidery'
 import { loadGlyphs, useFontsVersion } from './fonts'
+import { hoverCursor, noRaycast, pick, pickSection } from './picking'
 import { buildFaceStrip, buildRibbon, ellipseFrames, tailFrames, type Frame } from './ribbon'
 import { createStitchTextures, stitchRowsForWidth } from './stitching'
 
@@ -77,12 +80,22 @@ export function Belt({ layout, config }: BeltProps) {
     materials.faces.needsUpdate = true
   }
 
+  /** Tail click: the brand label opens its section; anywhere else opens that tail's embroidery. */
+  const onTailClick = (side: TailSide) =>
+    pick((e: ThreeEvent<MouseEvent>) => {
+      // Tail UVs are physical: u × belt width = distance from the knot.
+      const fromEnd = tailLength - (e.uv?.x ?? 0) * width
+      const labelTop = LABEL_END_MARGIN + LABEL_LENGTH_PER_WIDTH * width + 0.005
+      const onLabel = config.logo && config.logoTail === side && fromEnd <= labelTop
+      useUiStore.getState().focusPart(onLabel ? 'label' : 'embroidery', side)
+    })
+
   return (
-    <group name="belt">
-      <mesh geometry={geometries.inner} material={materials.ribbon} castShadow />
-      <mesh geometry={geometries.outer} material={materials.ribbon} castShadow />
-      <mesh geometry={geometries.l} material={materials.ribbon} castShadow />
-      <mesh geometry={geometries.r} material={materials.ribbon} castShadow />
+    <group name="belt" {...hoverCursor}>
+      <mesh geometry={geometries.inner} material={materials.ribbon} castShadow onClick={pickSection('belt')} />
+      <mesh geometry={geometries.outer} material={materials.ribbon} castShadow onClick={pickSection('belt')} />
+      <mesh geometry={geometries.l} material={materials.ribbon} castShadow onClick={onTailClick('l')} />
+      <mesh geometry={geometries.r} material={materials.ribbon} castShadow onClick={onTailClick('r')} />
       <TailEmbroidery side="l" geometry={geometries.lFace} layout={layout} config={config} />
       <TailEmbroidery side="r" geometry={geometries.rFace} layout={layout} config={config} />
       {/* Placeholder knot — replaced by a modeled square knot in phase 3. */}
@@ -93,6 +106,7 @@ export function Belt({ layout, config }: BeltProps) {
         position={[0, WAIST_Y, knot.z]}
         material={materials.faces}
         castShadow
+        onClick={pickSection('belt')}
       />
     </group>
   )
@@ -108,7 +122,7 @@ interface TailEmbroideryProps {
 function TailEmbroidery({ side, geometry, layout, config }: TailEmbroideryProps) {
   const fontsVersion = useFontsVersion()
   const texts = config.texts.filter((t) => t.tail === side && t.text.trim())
-  const logo = config.logo && side === BRAND_LABEL_TAIL
+  const logo = config.logo && side === config.logoTail
   const textsKey = JSON.stringify(texts)
 
   useEffect(() => {
@@ -127,7 +141,7 @@ function TailEmbroidery({ side, geometry, layout, config }: TailEmbroideryProps)
 
   if (art.empty) return null
   return (
-    <mesh geometry={geometry}>
+    <mesh geometry={geometry} raycast={noRaycast}>
       <meshStandardMaterial
         map={art.map}
         bumpMap={art.bumpMap}

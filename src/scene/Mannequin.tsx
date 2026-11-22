@@ -1,15 +1,19 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { Decal } from '@react-three/drei'
-import { patchStyle, type BeltConfig } from '../config/schema'
+import { CHEST_THREAD_HEX, type BeltConfig } from '../config/schema'
+import { useUiStore } from '../uiStore'
+import { hoverCursor, noRaycast, pick, pickSection } from './picking'
 import { WAIST_Y, type Ellipse } from './beltLayout'
-import { BODY_SHAPES, CHEST_HEIGHT } from './bodyShape'
-import { drawPatchArt } from './embroidery'
+import { BODY_SHAPES, profileRadiusAt, type BodyShape } from './bodyShape'
+import { drawChestArt } from './embroidery'
 import { loadGlyphs, useFontsVersion } from './fonts'
 
 const DOGI_WHITE = '#f6f5f0'
 const SKIN = '#cfc8bd'
-const PATCH_SIZE = 0.09
+/** Width of one embroidered chest character (m), and where the column starts. */
+const CHEST_CHAR_SIZE = 0.05
+const CHEST_TOP_Y = WAIST_Y + 0.38
 
 interface MannequinProps {
   body: Ellipse
@@ -38,10 +42,19 @@ export function Mannequin({ body, config }: MannequinProps) {
   const legRadius = a * (config.build === 'heavy' ? 0.52 : 0.48)
 
   return (
-    <group name="mannequin">
-      <mesh geometry={jacket} castShadow receiveShadow>
+    <group name="mannequin" {...hoverCursor} onClick={pickSection('body')}>
+      <mesh
+        geometry={jacket}
+        castShadow
+        receiveShadow
+        onClick={pick((e) => {
+          // Front of the upper jacket → chest kanji; anywhere else → body shape.
+          const chest = e.point.z > 0 && e.point.y > WAIST_Y + 0.15
+          useUiStore.getState().focusPart(chest ? 'chest' : 'body')
+        })}
+      >
         <meshStandardMaterial color={DOGI_WHITE} roughness={0.95} />
-        <ChestPatch key={jacket.uuid} a={a} chest={shape.chest} depthRatio={shape.depthRatio} config={config} />
+        <ChestKanji key={jacket.uuid} a={a} shape={shape} config={config} />
       </mesh>
 
       {/* Arms (sleeves) */}
@@ -74,51 +87,54 @@ export function Mannequin({ body, config }: MannequinProps) {
   )
 }
 
-interface ChestPatchProps {
+interface ChestKanjiProps {
   a: number
-  chest: number
-  depthRatio: number
+  shape: BodyShape
   config: BeltConfig
 }
 
-/** Embroidered patch on the wearer's left chest (the viewer's right, +x). */
-function ChestPatch({ a, chest, depthRatio, config }: ChestPatchProps) {
+/** Kanji embroidered on the wearer's left chest (the viewer's right, +x), reading top to bottom. */
+function ChestKanji({ a, shape, config }: ChestKanjiProps) {
   const fontsVersion = useFontsVersion()
-  const style = patchStyle(config.patch)
-  const text = config.patchText
+  const { show, text, font } = config.chest
 
   useEffect(() => {
-    void loadGlyphs('mincho', text)
-  }, [text])
+    if (show) void loadGlyphs(font, text)
+  }, [show, font, text])
 
   const art = useMemo(
-    () => (style.id === 'none' ? null : drawPatchArt(style, text)),
-    [style.id, text, fontsVersion],
+    () => (show && text.trim() ? drawChestArt(text, CHEST_THREAD_HEX, font) : null),
+    [show, text, font, fontsVersion],
   )
   useEffect(() => () => art?.dispose(), [art])
 
   const placement = useMemo(() => {
-    // Point on the elliptical chest surface, then face the decal along the surface normal.
-    const r = a * chest
-    const x = r * 0.48
-    const z = r * depthRatio * Math.sqrt(1 - (x / r) ** 2)
-    const normal = new THREE.Vector3(x / (r * r), 0, z / (r * depthRatio) ** 2).normalize()
+    if (!art) return null
+    const height = CHEST_CHAR_SIZE * art.aspect
+    const y = CHEST_TOP_Y - height / 2
+    // Point on the elliptical jacket surface at that height; face the decal along its normal.
+    const r = a * profileRadiusAt(shape.profile, y - WAIST_Y)
+    const k = shape.depthRatio
+    const x = r * 0.45
+    const z = r * k * Math.sqrt(1 - (x / r) ** 2)
+    const normal = new THREE.Vector3(x / (r * r), 0, z / (r * k) ** 2).normalize()
     return {
-      position: [x, WAIST_Y + CHEST_HEIGHT, z] as [number, number, number],
+      position: [x, y, z] as [number, number, number],
       rotation: [0, Math.atan2(normal.x, normal.z), 0] as [number, number, number],
+      scale: [CHEST_CHAR_SIZE, height, 0.1] as [number, number, number],
     }
-  }, [a, chest, depthRatio])
+  }, [art, a, shape])
 
-  if (!art) return null
+  if (!art || !placement) return null
   return (
-    <Decal position={placement.position} rotation={placement.rotation} scale={[PATCH_SIZE, PATCH_SIZE, 0.08]}>
+    <Decal position={placement.position} rotation={placement.rotation} scale={placement.scale} raycast={noRaycast}>
       <meshStandardMaterial
         map={art.map}
         bumpMap={art.bumpMap}
         bumpScale={2}
         transparent
-        alphaTest={0.1}
-        roughness={0.6}
+        alphaTest={0.5}
+        roughness={0.5}
         polygonOffset
         polygonOffsetFactor={-4}
         depthWrite={false}

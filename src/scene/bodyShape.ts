@@ -47,4 +47,12 @@ export const BODY_SHAPES: Record<BuildId, BodyShape> = {
   heavy: { depthRatio: 0.9, profile: profile(1.02, 0.99, 1.04, 1.12), shoulder: 1.12, chest: 1.04 },
 }
 
-export const CHEST_HEIGHT = CHEST_Y
+/** Profile radius multiplier at height `y` above the waist (linear between profile points). */
+export function profileRadiusAt(profile: Array<[number, number]>, y: number): number {
+  for (let i = 1; i < profile.length; i++) {
+    const [r0, y0] = profile[i - 1]
+    const [r1, y1] = profile[i]
+    if (y >= y0 && y <= y1 && y1 > y0) return r0 + ((y - y0) / (y1 - y0)) * (r1 - r0)
+  }
+  return 1
+}
