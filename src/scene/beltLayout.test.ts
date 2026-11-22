@@ -12,7 +12,7 @@ describe('belt layout', () => {
 
   it('reproduces the measured reference belt (size 6 on a 92 cm waist → 35 cm tails)', () => {
     const r = REFERENCE_BELT
-    const { tailLength } = computeBeltLayout({ ...DEFAULT_CONFIG, waist: r.waistCm, size: r.beltSizeId, width: r.widthCm })
+    const { tailLength } = computeBeltLayout({ ...DEFAULT_CONFIG, waist: r.waistCm, size: r.beltSizeId })
     expect(tailLength * 100).toBeCloseTo(r.tailCm, 1)
   })
 

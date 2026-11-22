@@ -1,7 +1,6 @@
 import {
   BELT_COLORS,
   BELT_SIZES,
-  BELT_WIDTHS,
   CHEST_SIZES_MM,
   DEFAULT_CONFIG,
   CHAR_WIDTHS,
@@ -40,7 +39,6 @@ export function encodeConfig(config: BeltConfig): string {
   p.set('v', String(URL_VERSION))
   p.set('c', config.color)
   p.set('s', config.size)
-  p.set('w', String(config.width))
   p.set('wa', String(config.waist))
   config.texts.forEach((t, i) => {
     const k = `t${i + 1}`
@@ -66,7 +64,6 @@ export function decodeConfig(search: string): BeltConfig {
   return {
     color: oneOf(p.get('c'), ids(BELT_COLORS), d.color),
     size: oneOf(p.get('s'), ids(BELT_SIZES), d.size),
-    width: intOneOf(p.get('w'), BELT_WIDTHS, d.width),
     waist: intInRange(p.get('wa'), WAIST_MIN_CM, WAIST_MAX_CM, d.waist),
     texts: [decodeText(p, 1, d.texts[0]), decodeText(p, 2, d.texts[1])],
     logo: bool(p.get('lg'), d.logo),

@@ -5,7 +5,6 @@ import { decodeConfig, encodeConfig } from './url'
 const custom: BeltConfig = {
   color: 'brown',
   size: '4.5',
-  width: 5,
   waist: 100,
   texts: [
     { text: '山田 太郎', color: 'gin', weight: 5, charWidth: 'half' },
@@ -42,7 +41,7 @@ describe('url config', () => {
 
   it('keeps valid fields when others are invalid', () => {
     const decoded = decodeConfig('?c=green&s=99&w=5')
-    expect(decoded).toEqual({ ...DEFAULT_CONFIG, color: 'green', width: 5 })
+    expect(decoded).toEqual({ ...DEFAULT_CONFIG, color: 'green' })
   })
 
   it('decodes half sizes and the largest sizes', () => {

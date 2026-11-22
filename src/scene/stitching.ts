@@ -1,9 +1,7 @@
 import * as THREE from 'three'
 
-/** Stitch rows across the belt width (Shureido-style belts have ~10 at 4 cm). */
-export function stitchRowsForWidth(widthCm: number): number {
-  return widthCm >= 5 ? 12 : 10
-}
+/** Stitch rows across the 4 cm belt (Shureido-style belts have ~10). */
+export const STITCH_ROWS = 10
 
 const TILE = 512
 /** Stitches per tile; a tile is one belt-width long, so ~3.3 mm per stitch at 4 cm. */

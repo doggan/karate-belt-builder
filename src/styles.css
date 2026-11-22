@@ -440,3 +440,47 @@ summary:focus-visible {
     flex: 1 1 auto;
   }
 }
+
+/* ── Loading ─────────────────────────────────────────────────────────────── */
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: var(--bg);
+  transition: opacity 400ms ease;
+  z-index: 2;
+}
+
+.loading-overlay.done {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.loading-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.loading-bar {
+  width: 180px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.loading-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 200ms ease;
+}
+
+.loading-pct {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}

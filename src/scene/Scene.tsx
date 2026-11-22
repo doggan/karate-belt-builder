@@ -8,6 +8,7 @@ import { Belt } from './Belt'
 import { DogiModel } from './DogiModel'
 import { computeBeltLayout, WAIST_Y } from './beltLayout'
 import { setSceneCanvas, setViewReset } from './canvasHandle'
+import { useUiStore } from '../uiStore'
 
 const CAMERA_START = new THREE.Vector3(0.55, 1.15, 2.5)
 const TARGET_START = new THREE.Vector3(0, WAIST_Y, 0)
@@ -44,16 +45,24 @@ export function Scene() {
         <Lightformer form="rect" intensity={1} position={[3, 1.5, -1]} rotation-y={-Math.PI / 2} scale={[3, 2, 1]} />
       </Environment>
 
+      {/* The belt waits for the gi too, so everything appears together once loaded. */}
       <Suspense fallback={null}>
         <DogiModel layout={layout} config={config} />
+        <Belt layout={layout} config={config} />
+        <SceneReady />
       </Suspense>
-      <Belt layout={layout} config={config} />
 
       <ContactShadows position={[0, 0, 0]} scale={3} blur={2.5} opacity={0.45} far={1.5} />
 
       <CameraControls />
     </Canvas>
   )
+}
+
+/** Mounts only once everything in its Suspense boundary has loaded; tells the UI to drop the loader. */
+function SceneReady() {
+  useEffect(() => useUiStore.getState().setSceneReady(), [])
+  return null
 }
 
 /**

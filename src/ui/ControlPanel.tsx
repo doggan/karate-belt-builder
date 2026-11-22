@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BELT_COLORS,
   BELT_SIZES,
-  BELT_WIDTHS,
   CHEST_SIZES_MM,
   CHAR_WIDTHS,
   TAIL_SIDES,
@@ -61,24 +60,16 @@ export function ControlPanel() {
       <Section
         id="belt"
         title="Belt"
-        summary={`${beltColor(config.color).label} · ${config.width} cm · size ${beltSize(config.size).label}`}
+        summary={`${beltColor(config.color).label} · size ${beltSize(config.size).label}`}
       >
         <Field label="Color">
           <Swatches options={BELT_COLORS} value={config.color} onChange={(color) => update({ color })} />
-        </Field>
-        <Field label="Width">
-          <Segmented
-            label="Belt width"
-            options={BELT_WIDTHS.map((w) => ({ value: w, label: `${w} cm` }))}
-            value={config.width}
-            onChange={(width) => update({ width })}
-          />
         </Field>
         <Field label="Size" htmlFor="belt-size" hint={`Tails hang about ${tailCm} cm`}>
           <select id="belt-size" value={config.size} onChange={(e) => update({ size: e.target.value as BeltSizeId })}>
             {BELT_SIZES.map((s) => (
               <option key={s.id} value={s.id}>
-                Size {s.label} · {s.cm} cm{s.heightCm ? ` · ${s.heightCm} cm tall` : ''}
+                Size {s.label} · {s.cm} cm
               </option>
             ))}
           </select>

@@ -42,8 +42,8 @@ export const BELT_SIZES = [
 
 export type BeltSizeId = (typeof BELT_SIZES)[number]['id']
 
-export const BELT_WIDTHS = [4, 5] as const
-export type BeltWidthCm = (typeof BELT_WIDTHS)[number]
+/** Every belt is the standard 4 cm Shureido width. */
+export const BELT_WIDTH_CM = 4
 
 // ── Body ────────────────────────────────────────────────────────────────────
 
@@ -157,7 +157,6 @@ export interface HemEmbroidery {
 export interface BeltConfig {
   color: BeltColorId
   size: BeltSizeId
-  width: BeltWidthCm
   waist: WaistCm
   /** Embroidery on the [left, right] tail. */
   texts: [TailText, TailText]
@@ -171,7 +170,6 @@ export const DEFAULT_CONFIG: BeltConfig = {
   color: 'black',
   /** Size 5 is for ~180 cm wearers, matching the ~180 cm dogi model. */
   size: '5',
-  width: 4,
   waist: 85,
   texts: [
     { text: '空手道', color: '436', weight: 3, charWidth: 'full' },

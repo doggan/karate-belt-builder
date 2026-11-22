@@ -1,5 +1,5 @@
 import { REFERENCE_BELT } from '../config/reference'
-import { beltSize, type BeltConfig } from '../config/schema'
+import { BELT_WIDTH_CM, beltSize, type BeltConfig } from '../config/schema'
 import dogi from './dogiModel.json'
 
 /** Height of the belt center line above the floor (m). Matches the prepared dogi model. */
@@ -68,7 +68,7 @@ const KNOT_LENGTH_PER_WIDTH = (() => {
 })()
 
 export function computeBeltLayout(config: BeltConfig): BeltLayout {
-  const width = config.width / 100
+  const width = BELT_WIDTH_CM / 100
   const thickness = BELT_THICKNESS
   const { body, innerWrap, outerWrap, length: wrapLength } = wrapsFor(config.waist)
 

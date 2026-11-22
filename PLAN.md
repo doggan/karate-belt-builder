@@ -42,7 +42,7 @@ The single source of truth. Everything visual is derived from it.
 BeltConfig
   color      preset id            (later: base + optional stripe / tips / two-tone)
   size       belt size preset     (0–8 → length in cm)
-  width      4 | 5                (cm)
+  width      fixed at 4 cm (no option)
   waist      waist preset         (cm; drives mannequin + how long the tails hang)
   -- phase 2 --
   stitching  derived from width (10 rows @ 4cm, 12 @ 5cm; later: preset per brand)

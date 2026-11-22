@@ -13,14 +13,19 @@ interface UiStore {
   pulse: number
   /** The group the last 3D click pointed at (e.g. a tail, the brand label, the chest kanji). */
   focusTarget: FocusTarget | null
+  /** True once the gi model has loaded and the scene is showing. */
+  sceneReady: boolean
   setOpen: (id: SectionId | null) => void
   focusPart: (id: SectionId, target?: FocusTarget) => void
+  setSceneReady: () => void
 }
 
 export const useUiStore = create<UiStore>((set) => ({
   open: 'belt',
   pulse: 0,
   focusTarget: null,
+  sceneReady: false,
   setOpen: (open) => set({ open, focusTarget: null }),
   focusPart: (open, target) => set((s) => ({ open, pulse: s.pulse + 1, focusTarget: target ?? null })),
+  setSceneReady: () => set({ sceneReady: true }),
 }))

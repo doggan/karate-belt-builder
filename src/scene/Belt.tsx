@@ -19,7 +19,7 @@ import {
   updateRibbon,
   type Frame,
 } from './ribbon'
-import { createStitchTextures, stitchRowsForWidth } from './stitching'
+import { createStitchTextures, STITCH_ROWS } from './stitching'
 import { TailSim } from './tailPhysics'
 
 const WRAP_SEGMENTS = 160
@@ -114,7 +114,7 @@ export function Belt({ layout, config }: BeltProps) {
     }
   })
 
-  const stitches = useMemo(() => createStitchTextures(stitchRowsForWidth(config.width)), [config.width])
+  const stitches = useMemo(() => createStitchTextures(STITCH_ROWS), [])
   useEffect(
     () => () => {
       stitches.map.dispose()

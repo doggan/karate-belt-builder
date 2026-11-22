@@ -56,9 +56,15 @@ export function DogiModel({ layout, config }: DogiModelProps) {
   const { x: sx, z: sz } = layout.modelScale
   const geometry = useMemo(() => reshapeWaist(base, sx, sz), [base, sx, sz])
   useEffect(() => () => geometry.dispose(), [geometry])
-  const hemY = useMemo(() => findJacketHem(geometry, HEM_PROBE_X), [geometry])
-  // Where the jacket closes, measured a little above the hem.
-  const placket = useMemo(() => findPlacketEdge(geometry, hemY + 0.06), [geometry, hemY])
+  // The hem and the closing edge are found once on the unreshaped model (each takes ~100
+  // raycasts against the full mesh, far too slow to redo while the waist slider drags), then
+  // the edge's x is carried through the waist reshape analytically.
+  const hemY = useMemo(() => findJacketHem(base, HEM_PROBE_X), [base])
+  const basePlacket = useMemo(() => findPlacketEdge(base, hemY + 0.06), [base, hemY])
+  const placket = useMemo(
+    () => ({ ...basePlacket, x: basePlacket.x * waistScaleAt(hemY + 0.06, sx) }),
+    [basePlacket, hemY, sx],
+  )
 
   return (
     <group name="dogi" {...hoverCursor}>
@@ -77,8 +83,8 @@ export function DogiModel({ layout, config }: DogiModelProps) {
           else useUiStore.getState().focusPart('body')
         })}
       >
-        <ChestKanji key={geometry.uuid} geometry={geometry} config={config} />
-        <HemEmbroideryDecal key={`hem-${geometry.uuid}`} geometry={geometry} hemY={hemY} placket={placket} config={config} />
+        <ChestKanji geometry={geometry} config={config} />
+        <HemEmbroideryDecal geometry={geometry} hemY={hemY} placket={placket} config={config} />
       </mesh>
     </group>
   )
@@ -119,20 +125,33 @@ function toWorldFloatGeometry(mesh: THREE.Mesh): THREE.BufferGeometry {
  * The scale is full strength at the belt line and fades out above and below, so the
  * shoulders, sleeves and trouser legs keep their natural proportions.
  */
+/** Horizontal scale the waist reshape applies at height y, for a waist-line scale s. */
+function waistScaleAt(y: number, s: number): number {
+  const d = (y - WAIST_Y) / RESHAPE_FALLOFF
+  return 1 + (s - 1) * Math.exp(-d * d)
+}
+
 function reshapeWaist(base: THREE.BufferGeometry, sx: number, sz: number): THREE.BufferGeometry {
   const g = base.clone()
   const pos = g.getAttribute('position') as THREE.BufferAttribute
   const nrm = g.getAttribute('normal') as THREE.BufferAttribute | undefined
+  const p = pos.array as Float32Array
+  const n = nrm?.array as Float32Array | undefined
   for (let i = 0; i < pos.count; i++) {
-    const d = (pos.getY(i) - WAIST_Y) / RESHAPE_FALLOFF
-    const w = Math.exp(-d * d)
-    const kx = 1 + (sx - 1) * w
-    const kz = 1 + (sz - 1) * w
-    pos.setXYZ(i, pos.getX(i) * kx, pos.getY(i), pos.getZ(i) * kz)
-    if (nrm) {
+    const j = i * 3
+    const kx = waistScaleAt(p[j + 1], sx)
+    const kz = waistScaleAt(p[j + 1], sz)
+    p[j] *= kx
+    p[j + 2] *= kz
+    if (n) {
       // Normals transform by the inverse scale (ignoring the falloff's gradient — a small error).
-      const n = new THREE.Vector3(nrm.getX(i) / kx, nrm.getY(i), nrm.getZ(i) / kz).normalize()
-      nrm.setXYZ(i, n.x, n.y, n.z)
+      const nx = n[j] / kx
+      const ny = n[j + 1]
+      const nz = n[j + 2] / kz
+      const len = Math.hypot(nx, ny, nz) || 1
+      n[j] = nx / len
+      n[j + 1] = ny / len
+      n[j + 2] = nz / len
     }
   }
   pos.needsUpdate = true
@@ -167,6 +186,47 @@ function findPlacketEdge(geometry: THREE.BufferGeometry, y: number): { x: number
     prev = { x, z: hit.point.z }
   }
   return { x: best.x, outer: best.outer }
+}
+
+/**
+ * The part of the jacket a decal can touch: just the triangles within reach of its box.
+ * Projecting a decal clips every triangle of its target mesh, so doing it against the full
+ * 100k-triangle gi took ~90 ms per decal, every step of the waist slider.
+ */
+function cropAround(
+  geometry: THREE.BufferGeometry,
+  center: [number, number, number],
+  scale: [number, number, number],
+): { current: THREE.Mesh } {
+  const reach = Math.hypot(...scale) / 2 + 0.03
+  const r2 = reach * reach
+  const pos = geometry.getAttribute('position').array as Float32Array
+  const nrm = geometry.getAttribute('normal').array as Float32Array
+  const index = geometry.index?.array
+  const triCount = index ? index.length / 3 : pos.length / 9
+  const [cx, cy, cz] = center
+  const near = (v: number) => {
+    const dx = pos[v * 3] - cx
+    const dy = pos[v * 3 + 1] - cy
+    const dz = pos[v * 3 + 2] - cz
+    return dx * dx + dy * dy + dz * dz < r2
+  }
+  const outPos: number[] = []
+  const outNrm: number[] = []
+  for (let t = 0; t < triCount; t++) {
+    const a = index ? index[t * 3] : t * 3
+    const b = index ? index[t * 3 + 1] : t * 3 + 1
+    const c = index ? index[t * 3 + 2] : t * 3 + 2
+    if (!near(a) && !near(b) && !near(c)) continue
+    for (const v of [a, b, c]) {
+      outPos.push(pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2])
+      outNrm.push(nrm[v * 3], nrm[v * 3 + 1], nrm[v * 3 + 2])
+    }
+  }
+  const g = new THREE.BufferGeometry()
+  g.setAttribute('position', new THREE.Float32BufferAttribute(outPos, 3))
+  g.setAttribute('normal', new THREE.Float32BufferAttribute(outNrm, 3))
+  return { current: new THREE.Mesh(g) }
 }
 
 /** Decal transform facing the surface at a hit point. */
@@ -241,12 +301,13 @@ function HemEmbroideryDecal({
     const p = decalAt(hit, [HEM_CHAR_SIZE, height, 0.1])
     // Roll about the surface normal (Euler XYZ: the in-plane roll applies before the yaw).
     p.rotation[2] = HEM_TILT
-    return p
+    return { ...p, target: cropAround(geometry, p.position, p.scale) }
   }, [art, geometry, hemY, placket])
+  useEffect(() => () => placement?.target.current.geometry.dispose(), [placement])
 
   if (!art || !placement) return null
   return (
-    <Decal position={placement.position} rotation={placement.rotation} scale={placement.scale} raycast={noRaycast}>
+    <Decal mesh={placement.target} position={placement.position} rotation={placement.rotation} scale={placement.scale} raycast={noRaycast}>
       <meshStandardMaterial
         map={art.map}
         bumpMap={art.bumpMap}
@@ -282,23 +343,16 @@ function ChestKanji({ geometry, config }: { geometry: THREE.BufferGeometry; conf
     if (!art) return null
     const height = charSize * art.aspect
     const y = CHEST_TOP_Y - height / 2
-    // Find the jacket surface by casting a ray at the chest from the front.
-    const hit = new THREE.Raycaster(new THREE.Vector3(CHEST_X, y, 2), new THREE.Vector3(0, 0, -1)).intersectObject(
-      new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })),
-    )[0]
+    const hit = frontHit(geometry, CHEST_X, y)
     if (!hit) return null
-    const normal = hit.face ? hit.face.normal.clone() : new THREE.Vector3(0, 0, 1)
-    if (normal.z < 0) normal.negate()
-    return {
-      position: hit.point.toArray() as [number, number, number],
-      rotation: [0, Math.atan2(normal.x, normal.z), 0] as [number, number, number],
-      scale: [charSize, height, 0.1] as [number, number, number],
-    }
+    const p = decalAt(hit, [charSize, height, 0.1])
+    return { ...p, target: cropAround(geometry, p.position, p.scale) }
   }, [art, geometry, charSize])
+  useEffect(() => () => placement?.target.current.geometry.dispose(), [placement])
 
   if (!art || !placement) return null
   return (
-    <Decal position={placement.position} rotation={placement.rotation} scale={placement.scale} raycast={noRaycast}>
+    <Decal mesh={placement.target} position={placement.position} rotation={placement.rotation} scale={placement.scale} raycast={noRaycast}>
       <meshStandardMaterial
         map={art.map}
         bumpMap={art.bumpMap}

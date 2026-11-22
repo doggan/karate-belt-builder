@@ -14,7 +14,12 @@
     <title>Karate Belt Simulator</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Shown until the app's script loads; React replaces it. Matches the in-app loader. -->
+    <div id="root">
+      <div style="height:100%;display:grid;place-items:center;background:#ebe8e2;color:#6b665e;font:14px ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif">
+        Loading…
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
