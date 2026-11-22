@@ -13,7 +13,7 @@ on a white dogi in 3D, then share that exact customization as a link.
 | Text | Kanji/katakana only (no romaji yet). User picks which tail each text goes on |
 | Text length | Unclamped for now; text expands along the tail. Revisit later |
 | Platform | Desktop Chrome first, but layout and performance must work on mobile |
-| Color accuracy | Approximate; add a small disclaimer |
+| Color accuracy | Approximate; no calibration or disclaimer |
 | Sharing | Config encoded in the URL query string; copy/paste the link. No social previews |
 | Screenshot | "Download PNG" button |
 | Store integration | Out of scope |
@@ -45,11 +45,11 @@ BeltConfig
   width      4 | 5                (cm)
   waist      waist preset         (cm; drives mannequin + how long the tails hang)
   -- phase 2 --
-  build      'slim'|'average'|'heavy'  (waist cross-section + torso profile)
   stitching  derived from width (10 rows @ 4cm, 12 @ 5cm; later: preset per brand)
-  texts      [TailText, TailText]   { text, tail: 'l'|'r', color, weight 1–5, font }
+  texts      [left, right]  each { text, color, weight 1–5, charWidth full|half }  (brush font)
   logo       boolean,  logoTail 'l'|'r'
-  chest      { show, text, font }  (black vertical kanji on the wearer's left chest)
+  chest      { show, text, size (mm) }  (black brush-font vertical kanji on the wearer's left chest)
+  hem        { show, text, color, label }  (horizontal brush-font line along the jacket's bottom seam, wearer's left front)
 ```
 
 ### URL format (`src/config/url.ts`)
@@ -97,11 +97,8 @@ BeltConfig
   - Draw the stitch pattern procedurally on a canvas → normal map + subtle color map on the belt (wrap, tails and knot). No image assets needed.
   - The row count, stitch length and thread tone depend on the width (4cm vs 5cm). Make them presets so different "brands" can differ later.
   - Build this first: it creates the canvas-texture pipeline that the tail text reuses.
-- [x] **Body build**: change the waist shape to simulate a slim vs heavy build.
-  - The waist circumference preset already exists. Add a build control that also changes the cross-section (belly depth vs width, flatter vs rounder) and the hip/chest profile, so the belt visibly sits differently, not just bigger.
-  - Belt wrap and tail length keep being computed from the actual waist perimeter, so a heavier build automatically means shorter tails.
-  - New URL field (e.g. `b=slim|average|heavy`); older links default to `average`.
-- [x] Canvas-texture text on either tail (kanji/katakana): two text slots, each with tail, thread color, stroke weight (1–5) and font (Mincho / Gothic / Brush)
+- [x] ~~Body build~~ (removed later in favor of a single waist slider, 60–120 cm in 5 cm steps)
+- [x] Canvas-texture text on each tail (kanji/katakana): one slot per tail with thread color (dropdown with catalog codes), stroke weight (1–5) and full/half-width characters; brush font for all embroidery
 - [x] Japanese font loading (Google Fonts unicode-range slices; canvases redraw when glyphs arrive)
 - [x] Generic black/red brand label, show/hide
 - [x] Vertical chest kanji on the wearer's upper left chest (drei `Decal`), Shureido thread colors
@@ -113,18 +110,48 @@ BeltConfig
   (flashes that tail's text, or moves a free text slot there), brand label → Brand label,
   upper jacket front → Chest kanji, rest of body → Body. Drags (camera rotation) don't count as clicks.
 
+### Phase 2.6: Jacket hem embroidery ✅
+- [x] One horizontal line along the jacket's bottom seam on the wearer's left front, running inward from near the side seam
+- [x] Thread color (catalog dropdown), optional brand label after the text
+- [x] Hem height found automatically on the model (biggest step back from jacket to trousers), so it follows the waist slider
+- [ ] Long text can sit behind the right belt tail; consider a side option (wearer's left/right) or auto-shrink
+
 ### Phase 3: Realism
-- [ ] Real dogi model (Blender → glTF, Draco/meshopt compressed), jacket lapels, sleeves, skirt
-- [ ] Modeled square knot
-- [ ] Materials: cotton vs satin belts (`MeshPhysicalMaterial` sheen), canvas-weave normal map for the dogi (stitch rows move to phase 2)
+- [x] Real dogi model (AI-generated scan, see "Dogi model pipeline" below), 765 KB compressed
+- [x] Waist slider reshapes the model around the belt line; the generated belt wraps its measured waist
+- [x] Modeled square knot: tilted vertical loop over the crossing, tails coming out from under it at upper-right / lower-left and splaying out (`src/scene/knot.ts`)
 - [ ] Belt variants: stripe, colored tips, two-tone (red/white, red/black), dan bars
-- [ ] Color calibration against photos of real belts + disclaimer
 
 ### Phase 4: Polish
-- [ ] Tail physics (Verlet chain)
+- [x] Tail physics: stiff Verlet chain that only flexes out of the belt's plane (no sideways bending), gentle breeze, lift on click, reacts to camera orbit/pan (`src/scene/tailPhysics.ts`); breeze off with reduced-motion
 - [ ] Mobile performance pass (DPR cap, triangle and texture budget, touch controls)
 - [ ] Camera presets (front / side / tails close-up)
 - [ ] Optional text-length clamping / auto-fit
+
+## Dogi model pipeline
+- Source: `assets/models/dogi-source.glb` (28 MB, git-ignored). It is a single fused mesh with a black belt baked in.
+- `npm run model` = `model:prepare` + `model:optimize`:
+  - `scripts/prepare-model.mjs`: finds the baked belt (connected dark-textured triangles grown from the back of
+    the waist), deletes the hanging tails, flattens + repaints the wrap/knot as jacket fabric, rotates to face +Z,
+    scales to meters with the belt line at y = 1.0, and writes the measured waist to `src/scene/dogiModel.json`.
+  - `gltf-transform optimize`: simplify to ~100k triangles, meshopt + WebP 2K textures → `public/models/dogi.glb` (committed).
+- At runtime (`src/scene/DogiModel.tsx`) the waist slider scales the model horizontally, full strength at the
+  belt line and fading out toward the shoulders and hems.
+- Known limits: the scan is baggy (≈112 cm waist as sculpted), so small waists pinch it in noticeably; faint
+  repaint seams remain just above/below the belt; no head or hands (ghost-mannequin look).
+
+## Reference dimensions (measured)
+Real-world measurements the 3D scene is calibrated against. Source of truth in code:
+`src/config/reference.ts`; `src/scene/beltLayout.test.ts` checks the app reproduces them.
+
+| What | Measurement | Source | Used for |
+|---|---|---|---|
+| Tail length | **~35 cm** per tail, size 6 belt on a **~92 cm** waist (belt width assumed 4 cm) | Real belt, measured in person, 2026-11-22 | Knot allowance: belt − 2 wraps − 2 tails ≈ 45 cm for a 4 cm belt (scales with width) |
+| Brand label length | **6.5 cm** along the tail | Same belt | Label size on the tail (and its proportions on the hem) |
+| Brand label position | **0.5 cm** from the tip of the tail | Same belt | Label placement |
+
+Still to measure: knot width/height, wrap overlap, belt thickness, embroidery character size on tails,
+hem embroidery size/position.
 
 ## Shureido reference data
 - **Belt sizes (official):** 00 = 190 cm, 0 = 200, 1 = 210, 1½ = 220, 2 = 230, 2½ = 240, 3 = 250, 3½ = 260,
@@ -135,13 +162,13 @@ BeltConfig
   photo, so they are approximate (camera sheen makes the whites and pale tints read a little bright).
 - **Belt colors offered:** white, yellow, green, brown, black.
 - **Brand label:** one generic black/red label (fictional), show/hide, on either tail.
-- **Chest:** black kanji embroidered directly on the jacket (5 cm characters), one vertical column, font choice. No patch.
+- **Model:** see "Dogi model pipeline".
+- **Chest:** black kanji embroidered directly on the jacket in the brush font, one vertical column, character size 3–7 cm (slider, default 5 cm). No patch.
 
 ## Open questions
 - The mannequin is a fixed ~180 cm tall regardless of belt size. Should it scale to the size's wearer height?
 - Knot allowance (5.5 × belt width) is a guess; tune against a real tied belt so tail lengths match photos.
 - Long text currently runs up the tail and under the knot (by design for now). Decide on clamping/auto-fit.
-- Body build: three presets (current), or a continuous slider? Build keeps the waist measurement fixed and changes shape, so "heavy" usually also wants a bigger waist.
 - Stitching: currently tone-on-tone. Add a contrast thread option?
 - Should waist size be a user-facing control or derived from belt size? (Currently a control.)
 - Embroidery fonts: which styles to offer (block/mincho vs brush), and their licenses.

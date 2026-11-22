@@ -8,7 +8,10 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "model:prepare": "node scripts/prepare-model.mjs",
+    "model:optimize": "gltf-transform optimize assets/models/dogi-prepared.glb public/models/dogi.glb --compress meshopt --texture-compress webp --texture-size 2048 --simplify true --simplify-ratio 0.1 --simplify-error 0.0005",
+    "model": "npm run model:prepare && npm run model:optimize"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.9",
@@ -19,10 +22,14 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@gltf-transform/cli": "^4.5.1",
+    "@gltf-transform/core": "^4.5.1",
+    "@gltf-transform/functions": "^4.5.1",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@types/three": "^0.187.0",
     "@vitejs/plugin-react": "^6.3.0",
+    "sharp": "^0.35.5",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.1"

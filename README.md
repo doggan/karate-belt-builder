@@ -13,4 +13,5 @@ npm install
 npm run dev        # http://localhost:5173
 npm test           # unit tests
 npm run build      # typecheck + production build to dist/
+npm run model      # rebuild public/models/dogi.glb from assets/models/dogi-source.glb
 ```

@@ -2,3 +2,7 @@ node_modules
 dist
 *.local
 .DS_Store
+
+# Large source models; only optimized copies in public/ are committed
+assets/models/*-source.glb
+assets/models/*-prepared.glb
