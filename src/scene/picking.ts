@@ -1,6 +1,5 @@
 import type { ThreeEvent } from '@react-three/fiber'
-import type { TailSide } from '../config/schema'
-import { useUiStore, type SectionId } from '../uiStore'
+import { useUiStore, type FocusTarget, type SectionId } from '../uiStore'
 
 /** A press that moves more than this many pixels is a camera drag, not a click. */
 const CLICK_TOLERANCE_PX = 5
@@ -15,8 +14,8 @@ export function pick(handler: (e: ThreeEvent<MouseEvent>) => void) {
 }
 
 /** Shorthand: clicking this part opens a panel section. */
-export function pickSection(id: SectionId, tail?: TailSide) {
-  return pick(() => useUiStore.getState().focusPart(id, tail))
+export function pickSection(id: SectionId, target?: FocusTarget) {
+  return pick(() => useUiStore.getState().focusPart(id, target))
 }
 
 /** Pointer cursor while hovering clickable parts. */

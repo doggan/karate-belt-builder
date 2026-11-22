@@ -49,7 +49,7 @@ BeltConfig
   texts      [left, right]  each { text, color, weight 1–5, charWidth full|half }  (brush font)
   logo       boolean,  logoTail 'l'|'r'
   chest      { show, text, size (mm) }  (black brush-font vertical kanji on the wearer's left chest)
-  hem        { show, text, color, label }  (horizontal brush-font line along the jacket's bottom seam, wearer's left front)
+  hem        { show, text, label }  (black brush-font vertical column on the front edge where the jacket closes, just above the hem)
 ```
 
 ### URL format (`src/config/url.ts`)
@@ -110,16 +110,19 @@ BeltConfig
   (flashes that tail's text, or moves a free text slot there), brand label → Brand label,
   upper jacket front → Chest kanji, rest of body → Body. Drags (camera rotation) don't count as clicks.
 
+### Phase 2.7: Panel layout ✅
+- [x] Sections: Belt · Belt embroidery (left tail, right tail, brand label) · Gi embroidery (chest kanji, hem) · Body
+- [x] Clicking a part in 3D opens its section and flashes the specific group (tail, label, chest, hem)
+
 ### Phase 2.6: Jacket hem embroidery ✅
-- [x] One horizontal line along the jacket's bottom seam on the wearer's left front, running inward from near the side seam
-- [x] Thread color (catalog dropdown), optional brand label after the text
-- [x] Hem height found automatically on the model (biggest step back from jacket to trousers), so it follows the waist slider
-- [ ] Long text can sit behind the right belt tail; consider a side option (wearer's left/right) or auto-shrink
+- [x] Black brush-font text written vertically up the front edge of the overlapping panel (where the jacket closes), starting ~2.5 cm above the hem, slanted ~17° to follow the collar line
+- [x] Optional brand label below the text
+- [x] Hem height and panel edge found automatically on the model (biggest depth steps), so it follows the waist slider
 
 ### Phase 3: Realism
 - [x] Real dogi model (AI-generated scan, see "Dogi model pipeline" below), 765 KB compressed
 - [x] Waist slider reshapes the model around the belt line; the generated belt wraps its measured waist
-- [x] Modeled square knot: tilted vertical loop over the crossing, tails coming out from under it at upper-right / lower-left and splaying out (`src/scene/knot.ts`)
+- [x] Modeled square knot: tilted vertical loop over the crossing; both tails come out from under its bottom edge at the same height and splay out, so equal tails end level (`src/scene/knot.ts`)
 - [ ] Belt variants: stripe, colored tips, two-tone (red/white, red/black), dan bars
 
 ### Phase 4: Polish

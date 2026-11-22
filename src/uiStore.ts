@@ -1,24 +1,26 @@
 import { create } from 'zustand'
-import type { TailSide } from './config/schema'
 
 /** Control panel sections; also the "parts" you can click in the 3D view. */
-export type SectionId = 'belt' | 'embroidery' | 'label' | 'chest' | 'hem' | 'body'
+export type SectionId = 'belt' | 'embroidery' | 'gi' | 'body'
+
+/** A specific group inside a section that a click in the 3D view points at. */
+export type FocusTarget = 'l' | 'r' | 'label' | 'chest' | 'hem'
 
 interface UiStore {
   /** The one open accordion section (null = all collapsed). */
   open: SectionId | null
   /** Bumped on every click in the 3D view, so the panel re-scrolls and flashes even for the same section. */
   pulse: number
-  /** Tail clicked in the 3D view, so the panel can point at that tail's text. */
-  focusTail: TailSide | null
+  /** The group the last 3D click pointed at (e.g. a tail, the brand label, the chest kanji). */
+  focusTarget: FocusTarget | null
   setOpen: (id: SectionId | null) => void
-  focusPart: (id: SectionId, tail?: TailSide) => void
+  focusPart: (id: SectionId, target?: FocusTarget) => void
 }
 
 export const useUiStore = create<UiStore>((set) => ({
   open: 'belt',
   pulse: 0,
-  focusTail: null,
-  setOpen: (open) => set({ open, focusTail: null }),
-  focusPart: (open, tail) => set((s) => ({ open, pulse: s.pulse + 1, focusTail: tail ?? null })),
+  focusTarget: null,
+  setOpen: (open) => set({ open, focusTarget: null }),
+  focusPart: (open, target) => set((s) => ({ open, pulse: s.pulse + 1, focusTarget: target ?? null })),
 }))

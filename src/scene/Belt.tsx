@@ -154,7 +154,7 @@ export function Belt({ layout, config }: BeltProps) {
       const fromEnd = tailLength - (e.uv?.x ?? 0) * width
       const labelTop = LABEL_END_MARGIN + LABEL_LENGTH + 0.005
       const onLabel = config.logo && config.logoTail === side && fromEnd <= labelTop
-      useUiStore.getState().focusPart(onLabel ? 'label' : 'embroidery', side)
+      useUiStore.getState().focusPart('embroidery', onLabel ? 'label' : side)
     })
 
   return (

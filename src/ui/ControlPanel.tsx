@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BELT_COLORS,
   BELT_SIZES,
@@ -19,7 +19,7 @@ import {
 import { computeBeltLayout } from '../scene/beltLayout'
 import { downloadScreenshot } from '../scene/canvasHandle'
 import { useBeltStore } from '../store'
-import { useUiStore } from '../uiStore'
+import { useUiStore, type FocusTarget } from '../uiStore'
 import { Field, Section, Segmented, Swatches, ThreadSelect, Toggle, useFlash } from './controls'
 
 const TAIL_OPTIONS = [
@@ -85,80 +85,85 @@ export function ControlPanel() {
         </Field>
       </Section>
 
-      <Section id="embroidery" title="Tail embroidery" summary={textSummary || 'None'}>
+      <Section id="embroidery" title="Belt embroidery" summary={[textSummary, config.logo ? 'label' : ''].filter(Boolean).join(' · ') || 'None'}>
         <EmbroideryControls />
-      </Section>
-
-      <Section id="label" title="Brand label" summary={config.logo ? `On ${tailName(config.logoTail)} tail` : 'Hidden'}>
-        <Toggle label="Show brand label" checked={config.logo} onChange={(logo) => update({ logo })} />
-        {config.logo && (
-          <Segmented label="Label tail" options={TAIL_OPTIONS} value={config.logoTail} onChange={(logoTail) => update({ logoTail })} />
-        )}
-      </Section>
-
-      <Section id="chest" title="Chest kanji" summary={config.chest.show ? config.chest.text || 'On' : 'Off'}>
-        <Toggle
-          label="Embroider kanji on the chest"
-          checked={config.chest.show}
-          onChange={(show) => update({ chest: { ...config.chest, show } })}
-        />
-        {config.chest.show && (
-          <>
-            <input
-              type="text"
-              lang="ja"
-              aria-label="Chest kanji"
-              placeholder="空手道"
-              value={config.chest.text}
-              onChange={(e) => update({ chest: { ...config.chest, text: e.target.value } })}
-            />
-            <Field
-              label={`Size · ${(config.chest.size / 10).toFixed(1)} cm per character`}
-              htmlFor="chest-size"
-              hint="Black thread, brush style, reading top to bottom."
-            >
-              <input
-                id="chest-size"
-                type="range"
-                min={CHEST_SIZES_MM[0]}
-                max={CHEST_SIZES_MM[CHEST_SIZES_MM.length - 1]}
-                step={CHEST_SIZES_MM[1] - CHEST_SIZES_MM[0]}
-                value={config.chest.size}
-                onChange={(e) => update({ chest: { ...config.chest, size: Number(e.target.value) as ChestSizeMm } })}
-              />
-            </Field>
-          </>
-        )}
+        <FocusGroup target="label" title="Brand label">
+          <Toggle label="Show brand label" checked={config.logo} onChange={(logo) => update({ logo })} />
+          {config.logo && (
+            <Segmented label="Label tail" options={TAIL_OPTIONS} value={config.logoTail} onChange={(logoTail) => update({ logoTail })} />
+          )}
+        </FocusGroup>
       </Section>
 
       <Section
-        id="hem"
-        title="Hem embroidery"
-        summary={config.hem.show ? [config.hem.text.trim(), config.hem.label ? 'label' : ''].filter(Boolean).join(' · ') || 'On' : 'Off'}
+        id="gi"
+        title="Gi embroidery"
+        summary={
+          [config.chest.show && config.chest.text.trim() ? `chest ${config.chest.text.trim()}` : '', config.hem.show ? `hem ${config.hem.text.trim()}`.trim() : '']
+            .filter(Boolean)
+            .join(' · ') || 'None'
+        }
       >
-        <Toggle
-          label="Embroider at the bottom of the jacket front"
-          checked={config.hem.show}
-          onChange={(show) => update({ hem: { ...config.hem, show } })}
-        />
-        {config.hem.show && (
-          <>
-            <input
-              type="text"
-              lang="ja"
-              aria-label="Hem embroidery text"
-              placeholder="山田"
-              value={config.hem.text}
-              onChange={(e) => update({ hem: { ...config.hem, text: e.target.value } })}
-            />
-            <p className="muted">Black thread, written vertically up the front edge where the jacket closes, just above the hem.</p>
-            <Toggle
-              label="Include brand label"
-              checked={config.hem.label}
-              onChange={(label) => update({ hem: { ...config.hem, label } })}
-            />
-          </>
-        )}
+        <FocusGroup target="chest" title="Chest kanji">
+          <Toggle
+            label="Embroider kanji on the chest"
+            checked={config.chest.show}
+            onChange={(show) => update({ chest: { ...config.chest, show } })}
+          />
+          {config.chest.show && (
+            <>
+              <input
+                type="text"
+                lang="ja"
+                aria-label="Chest kanji"
+                placeholder="空手道"
+                value={config.chest.text}
+                onChange={(e) => update({ chest: { ...config.chest, text: e.target.value } })}
+              />
+              <Field
+                label={`Size · ${(config.chest.size / 10).toFixed(1)} cm per character`}
+                htmlFor="chest-size"
+                hint="Black thread, brush style, reading top to bottom."
+              >
+                <input
+                  id="chest-size"
+                  type="range"
+                  min={CHEST_SIZES_MM[0]}
+                  max={CHEST_SIZES_MM[CHEST_SIZES_MM.length - 1]}
+                  step={CHEST_SIZES_MM[1] - CHEST_SIZES_MM[0]}
+                  value={config.chest.size}
+                  onChange={(e) => update({ chest: { ...config.chest, size: Number(e.target.value) as ChestSizeMm } })}
+                />
+              </Field>
+            </>
+          )}
+        </FocusGroup>
+
+        <FocusGroup target="hem" title="Hem embroidery">
+          <Toggle
+            label="Embroider at the bottom of the jacket front"
+            checked={config.hem.show}
+            onChange={(show) => update({ hem: { ...config.hem, show } })}
+          />
+          {config.hem.show && (
+            <>
+              <input
+                type="text"
+                lang="ja"
+                aria-label="Hem embroidery text"
+                placeholder="山田"
+                value={config.hem.text}
+                onChange={(e) => update({ hem: { ...config.hem, text: e.target.value } })}
+              />
+              <p className="muted">Black thread, written up the front edge where the jacket closes, slanted with the collar, just above the hem.</p>
+              <Toggle
+                label="Include brand label"
+                checked={config.hem.label}
+                onChange={(label) => update({ hem: { ...config.hem, label } })}
+              />
+            </>
+          )}
+        </FocusGroup>
       </Section>
 
       <Section id="body" title="Body" summary={`${config.waist} cm waist`}>
@@ -203,11 +208,12 @@ function EmbroideryControls() {
   const inputs = useRef<Partial<Record<TailSide, HTMLInputElement | null>>>({})
 
   useEffect(() => {
-    const { open, focusTail } = useUiStore.getState()
-    if (!pulse || open !== 'embroidery' || !focusTail) return
-    setTarget(focusTail)
-    const empty = !useBeltStore.getState().config.texts[tailIndex(focusTail)].text.trim()
-    if (empty && window.matchMedia('(pointer: fine)').matches) inputs.current[focusTail]?.focus({ preventScroll: true })
+    const { open, focusTarget } = useUiStore.getState()
+    const tail = focusTarget === 'l' || focusTarget === 'r' ? focusTarget : null
+    if (!pulse || open !== 'embroidery' || !tail) return setTarget(null)
+    setTarget(tail)
+    const empty = !useBeltStore.getState().config.texts[tailIndex(tail)].text.trim()
+    if (empty && window.matchMedia('(pointer: fine)').matches) inputs.current[tail]?.focus({ preventScroll: true })
   }, [pulse])
 
   return (
@@ -282,6 +288,19 @@ function TailTextControls({ side, pulse, targeted, inputRef }: TailTextControlsP
           </div>
         </>
       )}
+    </fieldset>
+  )
+}
+
+/** A titled group inside a section that flashes when a click in the 3D view points at it. */
+function FocusGroup({ target, title, children }: { target: FocusTarget; title: string; children: ReactNode }) {
+  const pulse = useUiStore((s) => s.pulse)
+  const targeted = useUiStore((s) => s.focusTarget === target)
+  const flash = useFlash(pulse, targeted && pulse > 0)
+  return (
+    <fieldset className={flash ? 'text-group flash' : 'text-group'}>
+      <legend>{title}</legend>
+      {children}
     </fieldset>
   )
 }

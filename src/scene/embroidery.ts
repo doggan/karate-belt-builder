@@ -234,26 +234,27 @@ export function drawChestArt(text: string, colorHex: string, fontId: FontId): Ch
 }
 
 export interface HemArt extends EmbroideryArt {
-  /** Width / height of the art, for sizing the decal. */
+  /** Height / width of the art, for sizing the decal. */
   aspect: number
 }
 
 /**
- * Hem embroidery: one horizontal line of brush-font text along the jacket's bottom seam,
- * optionally followed by the brand label. Drawn on a transparent canvas for a decal.
+ * Hem embroidery: brush-font text in one vertical column (top to bottom), with the
+ * brand label below it if requested — written up the jacket's front edge from the hem.
+ * Drawn on a transparent canvas for a decal.
  */
 export function drawHemArt(text: string, colorHex: string, withLabel: boolean): HemArt {
   const chars = Array.from(text.trim())
-  const H = 256
+  const W = 256
   const px = 210
-  const pitch = px * 1.04
-  const labelH = H * 0.92
-  const labelW = labelH / LABEL_ASPECT
-  const gap = chars.length && withLabel ? H * 0.25 : 0
-  const textW = chars.length * pitch
-  const W = Math.max(1, textW + gap + (withLabel ? labelW : 0) + H * 0.1)
+  const pitch = px * 1.06
+  const labelW = W * 0.9
+  const labelH = labelW * LABEL_ASPECT
+  const gap = chars.length && withLabel ? W * 0.3 : 0
+  const textH = chars.length * pitch
+  const H = Math.max(1, textH + gap + (withLabel ? labelH : 0) + W * 0.1)
   const { color, height, cc, hc } = canvasPair(W, H)
-  const x0 = H * 0.05
+  const y0 = W * 0.05
 
   for (const [ctx, isHeight] of [
     [cc, false],
@@ -267,20 +268,16 @@ export function drawHemArt(text: string, colorHex: string, withLabel: boolean): 
     ctx.fillStyle = isHeight ? '#fff' : colorHex
     ctx.strokeStyle = ctx.fillStyle
     if (isHeight) ctx.filter = 'blur(3px)'
-    chars.forEach((ch, i) => {
-      const x = x0 + (i + 0.5) * pitch
-      ctx.strokeText(ch, x, H / 2)
-      ctx.fillText(ch, x, H / 2)
-    })
+    drawVerticalText(ctx, chars, W / 2, y0, pitch, ctx.lineWidth)
     ctx.filter = 'none'
   }
   satinSheen(cc, color.width, color.height, 5)
   // The label is woven, not satin-stitched: draw it after the sheen.
   if (withLabel) {
-    const lx = x0 + textW + gap
-    const ly = (H - labelH) / 2
+    const lx = (W - labelW) / 2
+    const ly = y0 + textH + gap
     drawLabel(cc, lx, ly, labelW, labelH, false)
     drawLabel(hc, lx, ly, labelW, labelH, true)
   }
-  return { ...toArt(color, height, chars.length === 0 && !withLabel), aspect: W / H }
+  return { ...toArt(color, height, chars.length === 0 && !withLabel), aspect: H / W }
 }

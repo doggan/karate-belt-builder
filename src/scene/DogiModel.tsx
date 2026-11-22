@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 import { Decal, useGLTF } from '@react-three/drei'
-import { BRAND_LABEL, BLACK_THREAD_HEX, EMBROIDERY_FONT, threadColor, type BeltConfig } from '../config/schema'
+import { BRAND_LABEL, BLACK_THREAD_HEX, EMBROIDERY_FONT, type BeltConfig } from '../config/schema'
 import { useUiStore } from '../uiStore'
 import { WAIST_Y, type BeltLayout } from './beltLayout'
 import { drawChestArt, drawHemArt } from './embroidery'
@@ -16,14 +16,19 @@ const RESHAPE_FALLOFF = 0.32
 const CHEST_TOP_Y = WAIST_Y + 0.38
 const CHEST_X = 0.115
 /**
- * Hem embroidery (wearer's left front, along the bottom seam): height of the embroidered
- * line, its distance above the hem, the x used to find the hem, and how far in from the
- * jacket's side edge the line ends (m). The line runs from near the side seam inward.
+ * Hem embroidery: a vertical column on the front edge of the overlapping panel (where the
+ * jacket closes), starting just above the hem. Character width, gap above the hem, the
+ * x used to find the hem, and how far in from the panel's edge the column sits (m).
  */
-const HEM_LINE_HEIGHT = 0.026
-const HEM_ABOVE_SEAM = 0.028
+const HEM_CHAR_SIZE = 0.024
+const HEM_ABOVE_SEAM = 0.025
 const HEM_PROBE_X = 0.12
-const HEM_SIDE_INSET = 0.015
+const HEM_EDGE_INSET = 0.035
+/**
+ * The column is slanted to follow the collar line. Negative = top leans toward the viewer's
+ * right, which matches this model's closure.
+ */
+const HEM_TILT = THREE.MathUtils.degToRad(-17)
 
 useGLTF.preload(MODEL_URL)
 
@@ -50,6 +55,8 @@ export function DogiModel({ layout, config }: DogiModelProps) {
   const geometry = useMemo(() => reshapeWaist(base, sx, sz), [base, sx, sz])
   useEffect(() => () => geometry.dispose(), [geometry])
   const hemY = useMemo(() => findJacketHem(geometry, HEM_PROBE_X), [geometry])
+  // Where the jacket closes, measured a little above the hem.
+  const placket = useMemo(() => findPlacketEdge(geometry, hemY + 0.06), [geometry, hemY])
 
   return (
     <group name="dogi" {...hoverCursor}>
@@ -63,12 +70,13 @@ export function DogiModel({ layout, config }: DogiModelProps) {
           // embroidery; anywhere else → body.
           const front = e.point.z > 0
           const chest = front && e.point.y > WAIST_Y + 0.15
-          const hem = front && Math.abs(e.point.y - (hemY + HEM_ABOVE_SEAM)) < 0.06
-          useUiStore.getState().focusPart(chest ? 'chest' : hem ? 'hem' : 'body')
+          const hem = front && e.point.y > hemY - 0.01 && e.point.y < hemY + 0.22 && Math.abs(e.point.x - placket.x) < 0.1
+          if (chest || hem) useUiStore.getState().focusPart('gi', chest ? 'chest' : 'hem')
+          else useUiStore.getState().focusPart('body')
         })}
       >
         <ChestKanji key={geometry.uuid} geometry={geometry} config={config} />
-        <HemEmbroideryDecal key={`hem-${geometry.uuid}`} geometry={geometry} hemY={hemY} config={config} />
+        <HemEmbroideryDecal key={`hem-${geometry.uuid}`} geometry={geometry} hemY={hemY} placket={placket} config={config} />
       </mesh>
     </group>
   )
@@ -139,12 +147,24 @@ function frontHit(geometry: THREE.BufferGeometry, x: number, y: number): THREE.I
   )[0]
 }
 
-/** x of the jacket's side edge (wearer's left, +x) at height y, just in front of the side seam. */
-function jacketSideX(geometry: THREE.BufferGeometry, y: number): number {
-  const hit = new THREE.Raycaster(new THREE.Vector3(2, y, 0.04), new THREE.Vector3(-1, 0, 0)).intersectObject(
-    new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })),
-  )[0]
-  return hit ? hit.point.x : 0.2
+/**
+ * The front edge of the overlapping panel at height y: scanning across the front, it is the
+ * biggest step in depth (the top panel sits in front of the one underneath). `outer` is the
+ * direction (±1 in x) of the top panel, i.e. the side the embroidery goes on.
+ */
+function findPlacketEdge(geometry: THREE.BufferGeometry, y: number): { x: number; outer: 1 | -1 } {
+  let best = { x: 0, outer: 1 as 1 | -1, step: 0 }
+  let prev: { x: number; z: number } | null = null
+  for (let x = -0.12; x <= 0.12; x += 0.003) {
+    const hit = frontHit(geometry, x, y)
+    if (!hit) continue
+    if (prev) {
+      const dz = hit.point.z - prev.z
+      if (Math.abs(dz) > best.step) best = { x: (x + prev.x) / 2, outer: dz > 0 ? 1 : -1, step: Math.abs(dz) }
+    }
+    prev = { x, z: hit.point.z }
+  }
+  return { x: best.x, outer: best.outer }
 }
 
 /** Decal transform facing the surface at a hit point. */
@@ -179,10 +199,20 @@ function findJacketHem(geometry: THREE.BufferGeometry, x: number): number {
   return hemY
 }
 
-/** Brush-font text along the jacket's bottom seam on the wearer's left front, optional brand label. */
-function HemEmbroideryDecal({ geometry, hemY, config }: { geometry: THREE.BufferGeometry; hemY: number; config: BeltConfig }) {
+/** Black brush-font column up the front edge of the overlapping panel, just above the hem, optional brand label. */
+function HemEmbroideryDecal({
+  geometry,
+  hemY,
+  placket,
+  config,
+}: {
+  geometry: THREE.BufferGeometry
+  hemY: number
+  placket: { x: number; outer: 1 | -1 }
+  config: BeltConfig
+}) {
   const fontsVersion = useFontsVersion()
-  const { show, text, color, label } = config.hem
+  const { show, text, label } = config.hem
 
   useEffect(() => {
     if (!show) return
@@ -194,20 +224,23 @@ function HemEmbroideryDecal({ geometry, hemY, config }: { geometry: THREE.Buffer
   }, [show, text, label])
 
   const art = useMemo(
-    () => (show && (text.trim() || label) ? drawHemArt(text, threadColor(color).hex, label) : null),
-    [show, text, color, label, fontsVersion],
+    () => (show && (text.trim() || label) ? drawHemArt(text, BLACK_THREAD_HEX, label) : null),
+    [show, text, label, fontsVersion],
   )
   useEffect(() => () => art?.dispose(), [art])
 
   const placement = useMemo(() => {
     if (!art) return null
-    const width = HEM_LINE_HEIGHT * art.aspect
-    const y = hemY + HEM_ABOVE_SEAM
-    const outerX = jacketSideX(geometry, y) - HEM_SIDE_INSET
-    const centerX = Math.max(0.03, outerX - width / 2)
-    const hit = frontHit(geometry, centerX, y)
-    return hit ? decalAt(hit, [width, HEM_LINE_HEIGHT, 0.1]) : null
-  }, [art, geometry, hemY])
+    const height = HEM_CHAR_SIZE * art.aspect
+    const x = placket.x + placket.outer * (HEM_EDGE_INSET + HEM_CHAR_SIZE / 2)
+    const y = hemY + HEM_ABOVE_SEAM + height / 2
+    const hit = frontHit(geometry, x, y)
+    if (!hit) return null
+    const p = decalAt(hit, [HEM_CHAR_SIZE, height, 0.1])
+    // Roll about the surface normal (Euler XYZ: the in-plane roll applies before the yaw).
+    p.rotation[2] = HEM_TILT
+    return p
+  }, [art, geometry, hemY, placket])
 
   if (!art || !placement) return null
   return (
