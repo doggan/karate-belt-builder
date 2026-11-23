@@ -14,9 +14,10 @@
     <title>Karate Belt Builder</title>
   </head>
   <body>
-    <!-- Shown until the app's script loads; React replaces it. Matches the in-app loader. -->
+    <!-- Shown until the app's script loads; React replaces it. Fixed full-screen, because the
+         stylesheet that gives #root its height only arrives with the script. -->
     <div id="root">
-      <div style="height:100%;display:grid;place-items:center;background:#ebe8e2;color:#6b665e;font:14px ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif">
+      <div style="position:fixed;inset:0;display:grid;place-items:center;background:#ebe8e2;color:#6b665e;font:14px ui-sans-serif,system-ui,-apple-system,'Segoe UI',sans-serif">
         Loading…
       </div>
     </div>
