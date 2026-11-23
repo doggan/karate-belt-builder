@@ -31,6 +31,7 @@ export class TailSim {
   private pos: THREE.Vector3[] = []
   private prev: THREE.Vector3[] = []
   private seg: number[] = []
+  private live: Frame[] = []
   private accumulator = 0
   private time = 0
   private readonly phase: number
@@ -47,6 +48,7 @@ export class TailSim {
     this.pos = rest.map((f) => f.p.clone())
     this.prev = rest.map((f) => f.p.clone())
     this.seg = rest.map((f, i) => (i === 0 ? 0 : f.p.distanceTo(rest[i - 1].p)))
+    this.live = rest.map((f) => ({ ...f, p: f.p.clone(), across: f.across.clone(), out: f.out.clone() }))
   }
 
   /** Lift the tail away from the jacket: `speed` (m/s) at the tip, less toward the knot. */
@@ -70,6 +72,25 @@ export class TailSim {
 
   points(): THREE.Vector3[] {
     return this.pos
+  }
+
+  /**
+   * Current cross-sections of the tail. Positions come from the simulation; each
+   * cross-section keeps the orientation, width and cup of the rest shape, swung about
+   * its width along with the chain (the only way the tail is allowed to move). The first
+   * frame is the rest shape's, so the tail stays joined to the knot.
+   */
+  frames(): Frame[] {
+    const n = this.pos.length
+    const dir = new THREE.Vector3()
+    for (let i = 1; i < n; i++) {
+      const f = this.live[i]
+      dir.copy(this.pos[Math.min(n - 1, i + 1)]).sub(this.pos[i - 1]).normalize()
+      f.p.copy(this.pos[i])
+      f.across.copy(this.across[i]).addScaledVector(dir, -this.across[i].dot(dir)).normalize()
+      f.out.crossVectors(dir, f.across)
+    }
+    return this.live
   }
 
   /** `push`: extra acceleration at the tip along the face normal (m/s²). */

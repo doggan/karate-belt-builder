@@ -84,6 +84,14 @@ function CameraControls() {
       camera.position.add(delta)
     }
     controls.addEventListener('change', clampPan)
+    // TEMP (knot work): lets a dev session pose the camera for screenshots.
+    if (import.meta.env.DEV) {
+      ;(window as unknown as Record<string, unknown>).__view = (p: number[], t: number[]) => {
+        camera.position.set(p[0], p[1], p[2])
+        controls.target.set(t[0], t[1], t[2])
+        controls.update()
+      }
+    }
     setViewReset(() => {
       camera.position.copy(CAMERA_START)
       controls.target.copy(TARGET_START)

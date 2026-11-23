@@ -9,22 +9,15 @@ import { drawTailArt, LABEL_END_MARGIN, LABEL_LENGTH } from './embroidery'
 import { loadGlyphs, useFontsVersion } from './fonts'
 import { buildKnot } from './knot'
 import { hoverCursor, noRaycast, pick, pickSection } from './picking'
-import {
-  buildFaceStrip,
-  buildRibbon,
-  ellipseFrames,
-  framesFromPoints,
-  tailFrames,
-  updateFaceStrip,
-  updateRibbon,
-  type Frame,
-} from './ribbon'
+import { buildFaceStrip, buildRibbon, ellipseFrames, updateFaceStrip, updateRibbon, type RibbonOptions } from './ribbon'
 import { createStitchTextures, STITCH_ROWS } from './stitching'
 import { TailSim } from './tailPhysics'
+import { tailFrames } from './tailShape'
 
 const WRAP_SEGMENTS = 160
 const TAIL_SEGMENTS = 32
-const TAIL_SPLAY = THREE.MathUtils.degToRad(36)
+/** Quads across the belt's faces where they need to curve (the knot around the waist, the tails' cup). */
+const ACROSS_SEGMENTS = 6
 /** Embroidery floats this far above the belt face (m). */
 const EMBROIDERY_OFFSET = 0.0004
 /** Lift given to a tail when it is clicked (m/s at the tip). */
@@ -46,20 +39,15 @@ interface BeltProps {
 export function Belt({ layout, config }: BeltProps) {
   const { width, thickness, innerWrap, outerWrap, tailLength } = layout
 
-  const knot = useMemo(() => buildKnot(layout), [layout])
-  useEffect(
-    () => () => {
-      knot.loop.dispose()
-      knot.core.dispose()
-    },
-    [knot],
-  )
+  // Each end of the belt is one strand: out of the wrap, through the knot, into its tail.
+  // The knot part is fixed; the tail part is simulated, starting from the strand's last frame.
+  const knot = useMemo(() => buildKnot({ a: outerWrap.a, b: outerWrap.b }, width, thickness), [outerWrap.a, outerWrap.b, width, thickness])
 
   // Resting (styled) shape of each tail; the physics springs back toward it.
   const rest = useMemo(
     () => ({
-      l: tailFrames(knot.tailStart.l, -1, tailLength, TAIL_SPLAY, TAIL_SEGMENTS),
-      r: tailFrames(knot.tailStart.r, 1, tailLength, TAIL_SPLAY, TAIL_SEGMENTS),
+      l: tailFrames(knot.l.root, -1, tailLength, TAIL_SEGMENTS),
+      r: tailFrames(knot.r.root, 1, tailLength, TAIL_SEGMENTS),
     }),
     [knot, tailLength],
   )
@@ -68,18 +56,29 @@ export function Belt({ layout, config }: BeltProps) {
     [rest],
   )
 
+  const strip = useMemo(
+    () => ({
+      belt: { width, thickness, uLength: width } satisfies RibbonOptions,
+      tail: { width, thickness, uLength: width, across: ACROSS_SEGMENTS } satisfies RibbonOptions,
+      face: { width, offset: thickness / 2 + EMBROIDERY_OFFSET, across: ACROSS_SEGMENTS },
+    }),
+    [width, thickness],
+  )
   const geometries = useMemo(() => {
-    const ribbon = (frames: Frame[], closed: boolean) => buildRibbon(frames, width, thickness, closed, width)
+    // u = 0 where the tail starts, so the stitching runs unbroken from knot to tail.
+    const strand = (s: typeof knot.l) => buildRibbon(s.frames, { ...strip.tail, warp: s.warp, uStart: -s.length })
     return {
-      inner: ribbon(ellipseFrames(innerWrap.a, innerWrap.b, WAIST_Y, WRAP_SEGMENTS), true),
+      inner: buildRibbon(ellipseFrames(innerWrap.a, innerWrap.b, WAIST_Y, WRAP_SEGMENTS), { ...strip.belt, closed: true }),
       // The second wrap sits a hair lower, like a real double-wrapped belt.
-      outer: ribbon(ellipseFrames(outerWrap.a, outerWrap.b, WAIST_Y - 0.0015, WRAP_SEGMENTS), true),
-      l: ribbon(rest.l, false),
-      r: ribbon(rest.r, false),
-      lFace: buildFaceStrip(rest.l, width, thickness / 2 + EMBROIDERY_OFFSET),
-      rFace: buildFaceStrip(rest.r, width, thickness / 2 + EMBROIDERY_OFFSET),
+      outer: buildRibbon(ellipseFrames(outerWrap.a, outerWrap.b, WAIST_Y - 0.0015, WRAP_SEGMENTS), { ...strip.belt, closed: true }),
+      lKnot: strand(knot.l),
+      rKnot: strand(knot.r),
+      l: buildRibbon(rest.l, strip.tail),
+      r: buildRibbon(rest.r, strip.tail),
+      lFace: buildFaceStrip(rest.l, strip.face),
+      rFace: buildFaceStrip(rest.r, strip.face),
     }
-  }, [width, thickness, innerWrap, outerWrap, rest])
+  }, [strip, innerWrap.a, innerWrap.b, outerWrap.a, outerWrap.b, knot, rest])
   useEffect(() => () => Object.values(geometries).forEach((g) => g.dispose()), [geometries])
 
   // Tail cloth: step the simulation and re-pose the tail meshes every frame. Turning or
@@ -108,9 +107,9 @@ export function Belt({ layout, config }: BeltProps) {
       const sim = sims[side]
       const push = THREE.MathUtils.clamp((side === 'l' ? -spin : spin) + sway, -CAMERA_PUSH_MAX, CAMERA_PUSH_MAX)
       sim.advance(delta, breeze, push)
-      const frames = framesFromPoints(sim.points())
-      updateRibbon(geometries[side], frames, width, thickness, width)
-      updateFaceStrip(geometries[`${side}Face`], frames, width, thickness / 2 + EMBROIDERY_OFFSET)
+      const frames = sim.frames()
+      updateRibbon(geometries[side], frames, strip.tail)
+      updateFaceStrip(geometries[`${side}Face`], frames, strip.face)
     }
   })
 
@@ -161,8 +160,8 @@ export function Belt({ layout, config }: BeltProps) {
     <group name="belt" {...hoverCursor}>
       <mesh geometry={geometries.inner} material={materials.ribbon} castShadow onClick={pickSection('belt')} />
       <mesh geometry={geometries.outer} material={materials.ribbon} castShadow onClick={pickSection('belt')} />
-      <mesh geometry={knot.core} material={materials.ribbon} castShadow onClick={pickSection('belt')} />
-      <mesh geometry={knot.loop} material={materials.ribbon} castShadow onClick={pickSection('belt')} />
+      <mesh geometry={geometries.lKnot} material={materials.ribbon} castShadow onClick={pickSection('belt')} />
+      <mesh geometry={geometries.rKnot} material={materials.ribbon} castShadow onClick={pickSection('belt')} />
       {/* Animated meshes: their bounds change every frame, so skip frustum culling. */}
       <mesh geometry={geometries.l} material={materials.ribbon} castShadow frustumCulled={false} onClick={onTailClick('l')} />
       <mesh geometry={geometries.r} material={materials.ribbon} castShadow frustumCulled={false} onClick={onTailClick('r')} />
