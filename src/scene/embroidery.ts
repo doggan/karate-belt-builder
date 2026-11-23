@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { BRAND_LABEL, EMBROIDERY_FONT, GI_THREAD_HEX, threadColor, type FontId, type TailText, type TextWeight } from '../config/schema'
+import { BRAND_LABEL, EMBROIDERY_FONT, GI_THREAD_HEX, STRIPE_GAP_CM, STRIPE_WIDTH_CM, threadColor, type FontId, type TailText, type TextWeight } from '../config/schema'
 import { REFERENCE_LABEL } from '../config/reference'
 import { canvasFont } from './fonts'
 
@@ -22,6 +22,33 @@ export const LABEL_LENGTH = REFERENCE_LABEL.lengthCm / 100
 /** Label width as a fraction of the belt width, and its length/width for a 4 cm belt (for the hem label). */
 const LABEL_WIDTH_FRACTION = 0.84
 const LABEL_ASPECT = LABEL_LENGTH / (0.04 * LABEL_WIDTH_FRACTION)
+
+/** Stripes start this far from the tip (m), or this far past the brand label when it's on the same tail. */
+const STRIPES_FROM_TIP = 0.01
+const STRIPES_PAST_LABEL = 0.015
+
+/** Where things go at the end of a tail, as distances from its tip (m). */
+export interface TailEndLayout {
+  /** Each stripe's span: `near` the tip to `far` from it. */
+  stripes: Array<{ near: number; far: number }>
+  /** Embroidered text starts this far from the tip and runs toward the knot. */
+  textFromTip: number
+}
+
+/**
+ * Layout from the tail end upward: margin, brand label (if on this tail), stripes (if on
+ * this tail), then the text.
+ */
+export function tailEndLayout(width: number, logo: boolean, stripes: number): TailEndLayout {
+  const labelTop = LABEL_END_MARGIN + LABEL_LENGTH
+  const gap = width * 0.35 // between the label or stripes and the text
+  const w = STRIPE_WIDTH_CM / 100
+  const pitch = w + STRIPE_GAP_CM / 100
+  const first = logo ? labelTop + STRIPES_PAST_LABEL : STRIPES_FROM_TIP
+  const bands = Array.from({ length: stripes }, (_, i) => ({ near: first + i * pitch, far: first + i * pitch + w }))
+  const textFromTip = bands.length ? bands[bands.length - 1].far + gap : logo ? labelTop + gap : LABEL_END_MARGIN
+  return { stripes: bands, textFromTip }
+}
 
 /** Pixels per meter of belt. */
 const PPM = 5000
@@ -111,8 +138,8 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 }
 
 /**
- * Art for one tail. Layout from the tail end upward: margin, brand label (if on this
- * tail), then the texts — the first text sits nearest the knot, reading top to bottom.
+ * Art for one tail, laid out by `tailEndLayout` (the stripes themselves are part of the
+ * belt's material, not drawn here). The first text sits nearest the knot, reading top to bottom.
  * Text is never clamped: if it doesn't fit it simply continues up the tail.
  */
 export function drawTailArt(opts: {
@@ -120,6 +147,8 @@ export function drawTailArt(opts: {
   width: number
   texts: TailText[]
   logo: boolean
+  /** Stripes on this tail, which the text has to clear. */
+  stripes: number
   /** The belt's stitching thread color, for the label's border. */
   stitchHex: string
 }): EmbroideryArt {
@@ -130,17 +159,16 @@ export function drawTailArt(opts: {
   const texts = opts.texts.filter((t) => t.text.trim())
   const empty = texts.length === 0 && !opts.logo
 
-  let cursor = H - LABEL_END_MARGIN * ppm // bottom of the free space, moving up
-
   if (opts.logo) {
     const lw = W * LABEL_WIDTH_FRACTION
     const lh = LABEL_LENGTH * ppm
     const lx = (W - lw) / 2
-    const ly = cursor - lh
+    const ly = H - (LABEL_END_MARGIN + LABEL_LENGTH) * ppm
     drawLabel(cc, lx, ly, lw, lh, false, opts.stitchHex)
     drawLabel(hc, lx, ly, lw, lh, true, opts.stitchHex)
-    cursor = ly - W * 0.35
   }
+
+  let cursor = H - tailEndLayout(opts.width, opts.logo, opts.stripes).textFromTip * ppm // bottom of the free space, moving up
 
   const px = W * 0.7
   for (const t of [...texts].reverse()) {

@@ -3,6 +3,8 @@ import {
   BELT_SIZES,
   CHEST_SIZES_MM,
   DEFAULT_CONFIG,
+  MAX_STRIPES,
+  STRIPE_COLORS,
   CHAR_WIDTHS,
   MAX_TEXT_LENGTH,
   TAIL_SIDES,
@@ -19,6 +21,7 @@ import {
  *
  *   v     schema version
  *   c     belt color id          s   belt size id (e.g. 3, 3.5)
+ *   st    stripe count (0–10)    stc stripe color id   sts stripe tail (l|r)
  *   w     belt width (cm)        wa  waist (cm)
  *   t1    left-tail text   t1c thread color  t1w weight 1–5  t1h character width (full|half)
  *   t2…   right-tail text (same keys)
@@ -38,6 +41,9 @@ export function encodeConfig(config: BeltConfig): string {
   const p = new URLSearchParams()
   p.set('v', String(URL_VERSION))
   p.set('c', config.color)
+  p.set('st', String(config.stripes.count))
+  p.set('stc', config.stripes.color)
+  p.set('sts', config.stripes.tail)
   p.set('s', config.size)
   p.set('wa', String(config.waist))
   config.texts.forEach((t, i) => {
@@ -63,6 +69,11 @@ export function decodeConfig(search: string): BeltConfig {
   const d = DEFAULT_CONFIG
   return {
     color: oneOf(p.get('c'), ids(BELT_COLORS), d.color),
+    stripes: {
+      count: intInRange(p.get('st'), 0, MAX_STRIPES, d.stripes.count),
+      color: oneOf(p.get('stc'), ids(STRIPE_COLORS), d.stripes.color),
+      tail: oneOf(p.get('sts'), TAIL_SIDES, d.stripes.tail),
+    },
     size: oneOf(p.get('s'), ids(BELT_SIZES), d.size),
     waist: intInRange(p.get('wa'), WAIST_MIN_CM, WAIST_MAX_CM, d.waist),
     texts: [decodeText(p, 1, d.texts[0]), decodeText(p, 2, d.texts[1])],

@@ -305,3 +305,36 @@ export function wrapFrames(a: number, b: number, y: number, segments: number): F
   }
   return frames
 }
+
+const _a = new THREE.Vector3()
+
+/**
+ * `count` frames evenly spaced from distance `from` to `to` along a strip's frames (by arc
+ * length from the first frame), interpolated between the frames either side. Used to lay
+ * a short piece (a stripe's tape) onto a strip that is moving.
+ */
+export function sampleFrames(frames: Frame[], from: number, to: number, count: number, out: Frame[] = []): Frame[] {
+  let seg = 1
+  let segStart = 0
+  let segLength = frames[1].p.distanceTo(frames[0].p)
+  for (let k = 0; k < count; k++) {
+    const d = from + ((to - from) * k) / Math.max(1, count - 1)
+    while (seg < frames.length - 1 && d > segStart + segLength) {
+      segStart += segLength
+      seg++
+      segLength = frames[seg].p.distanceTo(frames[seg - 1].p)
+    }
+    const t = THREE.MathUtils.clamp((d - segStart) / (segLength || 1), 0, 1)
+    const [f0, f1] = [frames[seg - 1], frames[seg]]
+    const f = (out[k] ??= { p: new THREE.Vector3(), across: new THREE.Vector3(), out: new THREE.Vector3() })
+    f.p.lerpVectors(f0.p, f1.p, t)
+    f.across.lerpVectors(f0.across, f1.across, t).normalize()
+    // Keep `out` square to `across`.
+    _a.lerpVectors(f0.out, f1.out, t)
+    f.out.copy(_a).addScaledVector(f.across, -_a.dot(f.across)).normalize()
+    f.width = THREE.MathUtils.lerp(f0.width ?? 1, f1.width ?? 1, t)
+    f.cup = THREE.MathUtils.lerp(f0.cup ?? 0, f1.cup ?? 0, t)
+  }
+  out.length = count
+  return out
+}

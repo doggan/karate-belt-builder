@@ -1,4 +1,4 @@
-import { flyToView, resetView } from './scene/canvasHandle'
+import { flyToView } from './scene/canvasHandle'
 import { VIEW_BUTTONS } from './scene/cameraViews'
 import { Scene } from './scene/Scene'
 import { ControlPanel } from './ui/ControlPanel'
@@ -16,9 +16,6 @@ export default function App() {
               {v.label}
             </button>
           ))}
-          <button type="button" className="view-reset" onClick={resetView} title="Reset view" aria-label="Reset view">
-            ↺
-          </button>
         </nav>
       </main>
       <ControlPanel />

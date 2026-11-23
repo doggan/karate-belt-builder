@@ -2,11 +2,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
   BELT_COLORS,
   BELT_SIZES,
+  MAX_STRIPES,
+  STRIPE_COLORS,
   CHEST_SIZES_MM,
   CHAR_WIDTHS,
   TAIL_SIDES,
   beltColor,
   beltSize,
+  stripeColor,
   tailIndex,
   WAIST_MAX_CM,
   WAIST_MIN_CM,
@@ -63,11 +66,48 @@ export function ControlPanel() {
       <Section
         id="belt"
         title="Belt"
-        summary={`${beltColor(config.color).label} · size ${beltSize(config.size).label}`}
+        summary={[
+          beltColor(config.color).label,
+          config.stripes.count ? `${config.stripes.count} ${stripeColor(config.stripes.color).label.toLowerCase()} stripe${config.stripes.count > 1 ? 's' : ''}` : '',
+          `size ${beltSize(config.size).label}`,
+        ]
+          .filter(Boolean)
+          .join(' · ')}
       >
         <Field label="Color">
           <Swatches options={BELT_COLORS} value={config.color} onChange={(color) => update({ color })} />
         </Field>
+        <FocusGroup target="stripes" title="Stripes">
+          <Field label={`Number of stripes · ${config.stripes.count}`} htmlFor="stripe-count">
+            <input
+              id="stripe-count"
+              type="range"
+              min={0}
+              max={MAX_STRIPES}
+              step={1}
+              value={config.stripes.count}
+              onChange={(e) => update({ stripes: { ...config.stripes, count: Number(e.target.value) } })}
+            />
+          </Field>
+          {config.stripes.count > 0 && (
+            <>
+              <Field label="Stripe color">
+                <Swatches
+                  small
+                  options={STRIPE_COLORS}
+                  value={config.stripes.color}
+                  onChange={(color) => update({ stripes: { ...config.stripes, color } })}
+                />
+              </Field>
+              <Segmented
+                label="Stripe tail"
+                options={TAIL_OPTIONS}
+                value={config.stripes.tail}
+                onChange={(tail) => update({ stripes: { ...config.stripes, tail } })}
+              />
+            </>
+          )}
+        </FocusGroup>
         <Field label="Size" htmlFor="belt-size" hint={`Tails hang about ${tailCm} cm`}>
           <select id="belt-size" value={config.size} onChange={(e) => update({ size: e.target.value as BeltSizeId })}>
             {BELT_SIZES.map((s) => (

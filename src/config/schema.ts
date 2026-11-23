@@ -45,6 +45,31 @@ export type BeltSizeId = (typeof BELT_SIZES)[number]['id']
 /** Every belt is the standard 4 cm Shureido width. */
 export const BELT_WIDTH_CM = 4
 
+/** Rank stripes: bands of colored tape wrapped around one tail near its end. */
+export const STRIPE_COLORS = [
+  { id: 'white', label: 'White', hex: '#f3f1ea' },
+  { id: 'gold', label: 'Gold', hex: '#c9a24a' },
+  { id: 'yellow', label: 'Yellow', hex: '#f0c419' },
+  { id: 'orange', label: 'Orange', hex: '#e2742b' },
+  { id: 'red', label: 'Red', hex: '#c0262e' },
+  { id: 'green', label: 'Green', hex: '#2c7a3a' },
+  { id: 'blue', label: 'Blue', hex: '#2a5aa8' },
+  { id: 'purple', label: 'Purple', hex: '#5e3a8c' },
+  { id: 'brown', label: 'Brown', hex: '#5a3520' },
+  { id: 'black', label: 'Black', hex: '#151515' },
+] as const
+export type StripeColorId = (typeof STRIPE_COLORS)[number]['id']
+export const MAX_STRIPES = 10
+/** Stripe width and the gap between stripes along the tail (cm). */
+export const STRIPE_WIDTH_CM = 1
+export const STRIPE_GAP_CM = 1
+
+export interface Stripes {
+  count: number
+  color: StripeColorId
+  tail: TailSide
+}
+
 // ── Body ────────────────────────────────────────────────────────────────────
 
 /** Waist circumference over the jacket, in cm (slider steps). */
@@ -158,6 +183,7 @@ export interface HemEmbroidery {
 
 export interface BeltConfig {
   color: BeltColorId
+  stripes: Stripes
   size: BeltSizeId
   waist: WaistCm
   /** Embroidery on the [left, right] tail. */
@@ -170,6 +196,7 @@ export interface BeltConfig {
 
 export const DEFAULT_CONFIG: BeltConfig = {
   color: 'black',
+  stripes: { count: 0, color: 'gold', tail: 'l' },
   /** Size 5 is for ~180 cm wearers, matching the ~180 cm dogi model. */
   size: '5',
   waist: 85,
@@ -189,5 +216,6 @@ const byId = <T extends { id: string }>(list: readonly T[], id: string): T => li
 
 export const beltColor = (id: BeltColorId) => byId(BELT_COLORS, id)
 export const beltSize = (id: BeltSizeId) => byId(BELT_SIZES, id)
+export const stripeColor = (id: StripeColorId) => byId(STRIPE_COLORS, id)
 export const threadColor = (id: ThreadColorId) => byId(THREAD_COLORS, id)
 export const font = (id: FontId) => byId(FONTS, id)

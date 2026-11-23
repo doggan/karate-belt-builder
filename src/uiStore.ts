@@ -4,7 +4,7 @@ import { create } from 'zustand'
 export type SectionId = 'belt' | 'embroidery' | 'gi' | 'body'
 
 /** A specific group inside a section that a click in the 3D view points at. */
-export type FocusTarget = 'l' | 'r' | 'label' | 'chest' | 'hem'
+export type FocusTarget = 'l' | 'r' | 'label' | 'stripes' | 'chest' | 'hem'
 
 interface UiStore {
   /** The one open accordion section (null = all collapsed). */

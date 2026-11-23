@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
-import { BRAND_LABEL, EMBROIDERY_FONT, beltColor, tailIndex, type BeltConfig, type TailSide } from '../config/schema'
+import { BRAND_LABEL, EMBROIDERY_FONT, beltColor, stripeColor, tailIndex, type BeltConfig, type TailSide } from '../config/schema'
 import { useUiStore } from '../uiStore'
 import { WAIST_Y, type BeltLayout } from './beltLayout'
-import { drawTailArt, LABEL_END_MARGIN, LABEL_LENGTH } from './embroidery'
+import { drawTailArt, LABEL_END_MARGIN, LABEL_LENGTH, tailEndLayout } from './embroidery'
 import { loadGlyphs, useFontsVersion } from './fonts'
 import { buildKnot } from './knot'
 import { hoverCursor, noRaycast, pick, pickSection } from './picking'
-import { buildFaceStrip, buildRibbon, updateFaceStrip, updateRibbon, wrapFrames, type RibbonOptions } from './ribbon'
+import { buildFaceStrip, buildRibbon, sampleFrames, updateFaceStrip, updateRibbon, wrapFrames, type RibbonOptions } from './ribbon'
 import { createStitchTextures, STITCH_ROWS } from './stitching'
 import { TailSim } from './tailPhysics'
 import { tailFrames } from './tailShape'
@@ -19,6 +19,9 @@ const TAIL_SEGMENTS = 32
 const ACROSS_SEGMENTS = 6
 /** Embroidery floats this far above the belt face (m). */
 const EMBROIDERY_OFFSET = 0.0004
+/** Stripe tape: how far it stands proud of the belt on every side (m), and frames along each stripe. */
+const TAPE_THICKNESS = 0.0006
+const TAPE_SAMPLES = 5
 /** Lift given to a tail when it is clicked (m/s at the tip). */
 const CLICK_NUDGE = 0.35
 
@@ -60,6 +63,8 @@ export function Belt({ layout, config }: BeltProps) {
       belt: { width, thickness, uLength: width } satisfies RibbonOptions,
       tail: { width, thickness, uLength: width, across: ACROSS_SEGMENTS } satisfies RibbonOptions,
       face: { width, offset: thickness / 2 + EMBROIDERY_OFFSET, across: ACROSS_SEGMENTS },
+      // Wrapped around the tail, so a tape's thickness wider and thicker than it on each side.
+      tape: { width: width + 2 * TAPE_THICKNESS, thickness: thickness + 2 * TAPE_THICKNESS, uLength: width, across: ACROSS_SEGMENTS } satisfies RibbonOptions,
     }),
     [width, thickness],
   )
@@ -109,6 +114,7 @@ export function Belt({ layout, config }: BeltProps) {
       const frames = sim.frames()
       updateRibbon(geometries[side], frames, strip.tail)
       updateFaceStrip(geometries[`${side}Face`], frames, strip.face)
+      if (side === stripeTail) poseTapes(frames)
     }
   })
 
@@ -122,42 +128,77 @@ export function Belt({ layout, config }: BeltProps) {
     [stitches],
   )
 
+  // The belt, and the stripe tape (the same stitched cloth, in the stripe color).
   const materials = useMemo(() => {
     const faces = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 })
     const edges = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 })
-    return { faces, edges, ribbon: [faces, edges] }
+    const tapeFaces = faces.clone()
+    const tapeEdges = edges.clone()
+    return { faces, edges, tapeFaces, tapeEdges, ribbon: [faces, edges], tape: [tapeFaces, tapeEdges] }
   }, [])
   useEffect(
     () => () => {
-      materials.faces.dispose()
-      materials.edges.dispose()
+      for (const m of [materials.faces, materials.edges, materials.tapeFaces, materials.tapeEdges]) m.dispose()
     },
     [materials],
   )
 
-  const hex = beltColor(config.color).hex
-  materials.faces.color.set(hex)
-  materials.edges.color.set(hex).multiplyScalar(0.85)
-  if (materials.faces.map !== stitches.map) {
-    materials.faces.map = stitches.map
-    materials.faces.normalMap = stitches.normalMap
-    materials.faces.normalScale.set(1, 1)
-    materials.faces.aoMap = stitches.orm
-    materials.faces.aoMapIntensity = 1
-    materials.faces.roughnessMap = stitches.orm
-    materials.faces.roughness = 1
-    materials.faces.needsUpdate = true
+  for (const [[faces, edges], hex] of [
+    [materials.ribbon, beltColor(config.color).hex],
+    [materials.tape, stripeColor(config.stripes.color).hex],
+  ] as const) {
+    faces.color.set(hex)
+    edges.color.set(hex).multiplyScalar(0.85)
+    if (faces.map !== stitches.map) {
+      faces.map = stitches.map
+      faces.normalMap = stitches.normalMap
+      faces.normalScale.set(1, 1)
+      faces.aoMap = stitches.orm
+      faces.aoMapIntensity = 1
+      faces.roughnessMap = stitches.orm
+      faces.roughness = 1
+      faces.needsUpdate = true
+    }
   }
 
-  /** Tail click: lift the tail; the brand label opens its section, anywhere else that tail's embroidery. */
+  // Stripe bands, as distances from the knot along the striped tail (tail UVs are physical: u × width).
+  // Each is a short sleeve of tape wrapped around the tail, re-laid onto it every frame.
+  const stripeTail = config.stripes.count > 0 ? config.stripes.tail : null
+  const stripeBands = useMemo(
+    () =>
+      tailEndLayout(width, config.logo && config.logoTail === config.stripes.tail, config.stripes.count).stripes.map((b) => ({
+        from: tailLength - b.far,
+        to: tailLength - b.near,
+      })),
+    [width, tailLength, config.logo, config.logoTail, config.stripes.tail, config.stripes.count],
+  )
+  const tapes = useMemo(() => {
+    const frames = rest[config.stripes.tail]
+    return stripeBands.map((b) => {
+      const opts = { ...strip.tape, uStart: b.from }
+      return { band: b, opts, frames: sampleFrames(frames, b.from, b.to, TAPE_SAMPLES), geometry: buildRibbon(sampleFrames(frames, b.from, b.to, TAPE_SAMPLES), opts) }
+    })
+  }, [stripeBands, rest, strip, config.stripes.tail])
+  useEffect(() => () => tapes.forEach((t) => t.geometry.dispose()), [tapes])
+  const poseTapes = (frames: ReturnType<TailSim['frames']>) => {
+    for (const t of tapes) updateRibbon(t.geometry, sampleFrames(frames, t.band.from, t.band.to, TAPE_SAMPLES, t.frames), t.opts)
+  }
+
+  /**
+   * Tail click: lift the tail; the brand label opens its section, the stripes the belt's
+   * stripe options, anywhere else that tail's embroidery.
+   */
   const onTailClick = (side: TailSide) =>
     pick((e: ThreeEvent<MouseEvent>) => {
       sims[side].nudge(CLICK_NUDGE)
       // Tail UVs are physical: u × belt width = distance from the knot.
-      const fromEnd = tailLength - (e.uv?.x ?? 0) * width
+      const fromKnot = (e.uv?.x ?? 0) * width
+      const fromEnd = tailLength - fromKnot
       const labelTop = LABEL_END_MARGIN + LABEL_LENGTH + 0.005
       const onLabel = config.logo && config.logoTail === side && fromEnd <= labelTop
-      useUiStore.getState().focusPart('embroidery', onLabel ? 'label' : side)
+      const onStripes = side === stripeTail && stripeBands.some((b) => fromKnot >= b.from - 0.005 && fromKnot <= b.to + 0.005)
+      if (onStripes) useUiStore.getState().focusPart('belt', 'stripes')
+      else useUiStore.getState().focusPart('embroidery', onLabel ? 'label' : side)
     })
 
   return (
@@ -169,6 +210,10 @@ export function Belt({ layout, config }: BeltProps) {
       {/* Animated meshes: their bounds change every frame, so skip frustum culling. */}
       <mesh geometry={geometries.l} material={materials.ribbon} castShadow frustumCulled={false} onClick={onTailClick('l')} />
       <mesh geometry={geometries.r} material={materials.ribbon} castShadow frustumCulled={false} onClick={onTailClick('r')} />
+      {stripeTail &&
+        tapes.map((t, i) => (
+          <mesh key={i} geometry={t.geometry} material={materials.tape} castShadow frustumCulled={false} onClick={onTailClick(stripeTail)} />
+        ))}
       <TailEmbroidery side="l" geometry={geometries.lFace} layout={layout} config={config} />
       <TailEmbroidery side="r" geometry={geometries.rFace} layout={layout} config={config} />
     </group>
@@ -191,6 +236,7 @@ function TailEmbroidery({ side, geometry, layout, config }: TailEmbroideryProps)
   const fontsVersion = useFontsVersion()
   const texts = [config.texts[tailIndex(side)]].filter((t) => t.text.trim())
   const logo = config.logo && side === config.logoTail
+  const stripes = config.stripes.tail === side ? config.stripes.count : 0
   const textsKey = JSON.stringify(texts)
   const stitchHex = useMemo(() => labelStitchHex(beltColor(config.color).hex), [config.color])
 
@@ -203,8 +249,8 @@ function TailEmbroidery({ side, geometry, layout, config }: TailEmbroideryProps)
   }, [textsKey, logo])
 
   const art = useMemo(
-    () => drawTailArt({ tailLength: layout.tailLength, width: layout.width, texts, logo, stitchHex }),
-    [layout.tailLength, layout.width, textsKey, logo, stitchHex, fontsVersion],
+    () => drawTailArt({ tailLength: layout.tailLength, width: layout.width, texts, logo, stripes, stitchHex }),
+    [layout.tailLength, layout.width, textsKey, logo, stripes, stitchHex, fontsVersion],
   )
   useEffect(() => () => art.dispose(), [art])
 

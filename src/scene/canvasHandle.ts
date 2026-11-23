@@ -35,21 +35,16 @@ export function setCameraFlight(fn: Flight | null) {
 }
 
 /** Glide to one of the whole-body views (or the starting framing). */
-export function flyToView(id: ViewId | 'start') {
+export function flyToView(id: ViewId) {
   lastFocus = null
   flight?.(VIEW_POSES[id])
-}
-
-/** Put the camera back to its starting position and framing. */
-export function resetView() {
-  flyToView('start')
 }
 
 /** Glide to a close-up of the part being edited in the panel (once per group, not per input). */
 export function focusCamera(target: FocusTarget) {
   if (skipFocus || target === lastFocus) return
   lastFocus = target
-  flight?.(focusPose(target, useBeltStore.getState().config.logoTail))
+  flight?.(focusPose(target, useBeltStore.getState().config))
 }
 
 /** Focus a panel input without moving the camera (e.g. after the part was clicked in the 3D view). */

@@ -4,6 +4,7 @@ import { decodeConfig, encodeConfig } from './url'
 
 const custom: BeltConfig = {
   color: 'brown',
+  stripes: { count: 4, color: 'red', tail: 'r' },
   size: '4.5',
   waist: 100,
   texts: [
@@ -35,7 +36,7 @@ describe('url config', () => {
   })
 
   it('falls back per field for invalid values', () => {
-    const decoded = decodeConfig('?c=chartreuse&s=8&w=6&wa=-80&t1w=9&t1h=quarter&t1c=gold&lg=maybe&lgs=up&k=yes&ks=33&hm=2&hmc=nope&hml=x')
+    const decoded = decodeConfig('?c=chartreuse&st=11&stc=pink&sts=x&s=8&w=6&wa=-80&t1w=9&t1h=quarter&t1c=gold&lg=maybe&lgs=up&k=yes&ks=33&hm=2&hmc=nope&hml=x')
     expect(decoded).toEqual(DEFAULT_CONFIG)
   })
 
