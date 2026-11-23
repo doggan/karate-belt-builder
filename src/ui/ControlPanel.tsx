@@ -16,7 +16,7 @@ import {
   type TextWeight,
 } from '../config/schema'
 import { computeBeltLayout } from '../scene/beltLayout'
-import { downloadScreenshot } from '../scene/canvasHandle'
+import { downloadScreenshot, focusCamera, focusWithoutCamera } from '../scene/canvasHandle'
 import { useBeltStore } from '../store'
 import { useUiStore, type FocusTarget } from '../uiStore'
 import { Field, Section, Segmented, Swatches, ThreadSelect, Toggle, useFlash } from './controls'
@@ -235,7 +235,7 @@ function EmbroideryControls() {
     if (!pulse || open !== 'embroidery' || !tail) return setTarget(null)
     setTarget(tail)
     const empty = !useBeltStore.getState().config.texts[tailIndex(tail)].text.trim()
-    if (empty && window.matchMedia('(pointer: fine)').matches) inputs.current[tail]?.focus({ preventScroll: true })
+    if (empty && window.matchMedia('(pointer: fine)').matches) focusWithoutCamera(inputs.current[tail])
   }, [pulse])
 
   return (
@@ -270,7 +270,7 @@ function TailTextControls({ side, pulse, targeted, inputRef }: TailTextControlsP
   const set = (patch: Parameters<typeof updateText>[1]) => updateText(index, patch)
 
   return (
-    <fieldset className={flash ? 'text-group flash' : 'text-group'}>
+    <fieldset className={flash ? 'text-group flash' : 'text-group'} {...cameraFocus(side)}>
       <legend>{title}</legend>
       <input
         ref={inputRef}
@@ -314,13 +314,22 @@ function TailTextControls({ side, pulse, targeted, inputRef }: TailTextControlsP
   )
 }
 
+/**
+ * Editing a group (focusing or pressing any control in it) glides the camera to that part.
+ * Pointer-down covers browsers that don't focus buttons on click (Safari).
+ */
+const cameraFocus = (target: FocusTarget) => ({
+  onFocus: () => focusCamera(target),
+  onPointerDown: () => focusCamera(target),
+})
+
 /** A titled group inside a section that flashes when a click in the 3D view points at it. */
 function FocusGroup({ target, title, children }: { target: FocusTarget; title: string; children: ReactNode }) {
   const pulse = useUiStore((s) => s.pulse)
   const targeted = useUiStore((s) => s.focusTarget === target)
   const flash = useFlash(pulse, targeted && pulse > 0)
   return (
-    <fieldset className={flash ? 'text-group flash' : 'text-group'}>
+    <fieldset className={flash ? 'text-group flash' : 'text-group'} {...cameraFocus(target)}>
       <legend>{title}</legend>
       {children}
     </fieldset>

@@ -43,18 +43,42 @@ body {
   touch-action: none;
 }
 
-.view-reset {
+.view-bar {
   position: absolute;
   top: 12px;
   left: 12px;
-  padding: 6px 12px;
-  font: inherit;
-  font-size: 13px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
   border: 1px solid var(--border);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.85);
+}
+
+.view-bar button {
+  padding: 5px 11px;
+  font: inherit;
+  font-size: 13px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
   color: var(--text);
   cursor: pointer;
+}
+
+.view-bar button:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.view-bar button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+.view-bar .view-reset {
+  padding: 5px 9px;
+  border-left: 1px solid var(--border);
+  border-radius: 0 999px 999px 0;
 }
 
 .panel {

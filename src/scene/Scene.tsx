@@ -1,17 +1,19 @@
 import { Suspense, useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { Canvas, useThree } from '@react-three/fiber'
+import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { ContactShadows, Environment, Lightformer, OrbitControls } from '@react-three/drei'
 import type { OrbitControls as OrbitControlsImpl } from 'three-stdlib'
 import { useBeltStore } from '../store'
 import { Belt } from './Belt'
 import { DogiModel } from './DogiModel'
-import { computeBeltLayout, WAIST_Y } from './beltLayout'
-import { setSceneCanvas, setViewReset } from './canvasHandle'
+import { computeBeltLayout } from './beltLayout'
+import { setCameraFlight, setSceneCanvas } from './canvasHandle'
+import { VIEW_POSES, type CameraPose } from './cameraViews'
 import { useUiStore } from '../uiStore'
 
-const CAMERA_START = new THREE.Vector3(0.55, 1.15, 2.5)
-const TARGET_START = new THREE.Vector3(0, WAIST_Y, 0)
+const START = VIEW_POSES.start
+/** How long a glide to a preset view takes (s). */
+const FLIGHT_SECONDS = 0.9
 /** How far the view can be panned from the model (m), so it can't get lost off-screen. */
 const PAN_BOUNDS = new THREE.Box3(new THREE.Vector3(-0.7, 0.1, -0.5), new THREE.Vector3(0.7, 1.8, 0.5))
 
@@ -23,7 +25,7 @@ export function Scene() {
     <Canvas
       shadows="percentage"
       dpr={[1, 2]}
-      camera={{ position: CAMERA_START.toArray(), fov: 35, near: 0.05, far: 20 }}
+      camera={{ position: START.position.toArray(), fov: 35, near: 0.05, far: 20 }}
       gl={{ preserveDrawingBuffer: true, antialias: true }}
       onCreated={({ gl }) => setSceneCanvas(gl.domElement)}
     >
@@ -65,13 +67,26 @@ function SceneReady() {
   return null
 }
 
+interface Flight {
+  from: CameraPose
+  to: CameraPose
+  elapsed: number
+}
+
+const easeInOutCubic = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
+
+/** The camera's offset from its target, as a sphere around it. */
+const sphericalOf = (p: CameraPose) => new THREE.Spherical().setFromVector3(p.position.clone().sub(p.target))
+
 /**
  * Orbit (left drag / one finger), zoom (wheel / pinch) and pan (right drag, shift+drag,
- * or two fingers). Panning is kept within PAN_BOUNDS, and "Reset view" restores the start.
+ * or two fingers). Panning is kept within PAN_BOUNDS. The view bar and the panel can ask
+ * for a glide to a preset pose; grabbing the view cancels it.
  */
 function CameraControls() {
   const ref = useRef<OrbitControlsImpl>(null)
   const camera = useThree((s) => s.camera)
+  const flight = useRef<Flight | null>(null)
 
   useEffect(() => {
     const controls = ref.current
@@ -83,23 +98,57 @@ function CameraControls() {
       controls.target.add(delta)
       camera.position.add(delta)
     }
+    const cancelFlight = () => (flight.current = null)
     controls.addEventListener('change', clampPan)
-    setViewReset(() => {
-      camera.position.copy(CAMERA_START)
-      controls.target.copy(TARGET_START)
-      controls.update()
+    controls.addEventListener('start', cancelFlight)
+    setCameraFlight((to) => {
+      const from = { position: camera.position.clone(), target: controls.target.clone() }
+      if (from.position.distanceTo(to.position) < 1e-3 && from.target.distanceTo(to.target) < 1e-3) return
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        flight.current = null
+        camera.position.copy(to.position)
+        controls.target.copy(to.target)
+        controls.update()
+        return
+      }
+      flight.current = { from, to, elapsed: 0 }
     })
     return () => {
       controls.removeEventListener('change', clampPan)
-      setViewReset(null)
+      controls.removeEventListener('start', cancelFlight)
+      setCameraFlight(null)
     }
   }, [camera])
+
+  // Glide around the subject rather than straight through it: the target moves in a line
+  // while the camera swings around it (shortest way round), so front → back passes the side.
+  useFrame((_, delta) => {
+    const f = flight.current
+    const controls = ref.current
+    if (!f || !controls) return
+    f.elapsed += delta
+    const t = easeInOutCubic(Math.min(1, f.elapsed / FLIGHT_SECONDS))
+    const a = sphericalOf(f.from)
+    const b = sphericalOf(f.to)
+    let dTheta = b.theta - a.theta
+    if (dTheta > Math.PI) dTheta -= 2 * Math.PI
+    if (dTheta < -Math.PI) dTheta += 2 * Math.PI
+    const s = new THREE.Spherical(
+      THREE.MathUtils.lerp(a.radius, b.radius, t),
+      THREE.MathUtils.lerp(a.phi, b.phi, t),
+      a.theta + dTheta * t,
+    )
+    controls.target.lerpVectors(f.from.target, f.to.target, t)
+    camera.position.setFromSpherical(s).add(controls.target)
+    controls.update()
+    if (t >= 1) flight.current = null
+  })
 
   return (
     <OrbitControls
       ref={ref}
       makeDefault
-      target={TARGET_START.toArray()}
+      target={START.target.toArray()}
       enablePan
       screenSpacePanning
       enableDamping
