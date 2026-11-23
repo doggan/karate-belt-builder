@@ -135,13 +135,18 @@ BeltConfig
 - Source: `assets/models/dogi-source.glb` (28 MB, git-ignored). It is a single fused mesh with a black belt baked in.
 - `npm run model` = `model:prepare` + `model:optimize`:
   - `scripts/prepare-model.mjs`: finds the baked belt (connected dark-textured triangles grown from the back of
-    the waist), deletes the hanging tails, flattens + repaints the wrap/knot as jacket fabric, rotates to face +Z,
-    scales to meters with the belt line at y = 1.0, and writes the measured waist to `src/scene/dogiModel.json`.
+    the waist, widened over the belt's leftover relief, closing a few scan pinholes), then rebuilds that annulus
+    as jacket: a smooth tension-spline fill of the surrounding fabric as a height field r(θ, y) around the body
+    axis, the region's vertices placed onto it (folds untangled, nothing deleted, so the shell stays closed),
+    fabric just outside eased in, normals recomputed and textures repainted from the surrounding colors. Then it
+    rotates to face +Z, scales to meters with the belt line at y = 1.0, and writes the waist measured on the
+    rebuilt surface (across the belt's width) to `src/scene/dogiModel.json`.
   - `gltf-transform optimize`: simplify to ~100k triangles, meshopt + WebP 2K textures → `public/models/dogi.glb` (committed).
 - At runtime (`src/scene/DogiModel.tsx`) the waist slider scales the model horizontally, full strength at the
   belt line and fading out toward the shoulders and hems.
-- Known limits: the scan is baggy (≈112 cm waist as sculpted), so small waists pinch it in noticeably; faint
-  repaint seams remain just above/below the belt; no head or hands (ghost-mannequin look).
+- Known limits: the scan is baggy (≈112 cm waist as sculpted), so small waists pinch it in noticeably; a few
+  small creases remain where the jacket's front edge meets the rebuilt area right of the knot; no head or hands
+  (ghost-mannequin look).
 
 ## Reference dimensions (measured)
 Real-world measurements the 3D scene is calibrated against. Source of truth in code:
