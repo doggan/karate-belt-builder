@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '../config/schema'
-import { computeBeltLayout } from './beltLayout'
+import { computeBeltLayout, WAIST_Y } from './beltLayout'
 import { buildKnot, type KnotStrand } from './knot'
 import { buildRibbon } from './ribbon'
 import { tailFrames } from './tailShape'
@@ -57,8 +57,9 @@ describe('belt knot', () => {
     for (const waist of WAISTS) {
       const { knot } = knotFor(waist)
       expect(knot.l.root.p.y).toBeCloseTo(knot.r.root.p.y, 9)
+      // ...and the same distance either side of the middle of the belt.
       expect(knot.l.root.p.x).toBeLessThan(0)
-      expect(knot.r.root.p.x).toBeGreaterThan(0)
+      expect(Math.abs(knot.r.root.p.x + knot.l.root.p.x)).toBeLessThan(0.002)
       for (const strand of [knot.l, knot.r]) {
         expect(strand.root.out.z).toBeGreaterThan(0.9)
         expect(strand.root.across.x).toBeGreaterThan(0.5) // front face reads left to right
@@ -94,17 +95,27 @@ describe('belt knot', () => {
     }
   })
 
-  it('stands proud of the wrap', () => {
+  it('stands proud of the wrap and sits centered on the belt', () => {
     const { layout, knot } = knotFor(85)
     const front = layout.outerWrap.b + layout.thickness / 2
-    const reach = (strand: KnotStrand) => {
+    const box = new THREE.Box3()
+    const p = new THREE.Vector3()
+    const body = (strand: KnotStrand) => {
       const position = buildRibbon(strand.frames, { width: layout.width, thickness: layout.thickness, uLength: layout.width, warp: strand.warp }).getAttribute('position')
-      let z = -Infinity
-      for (let i = 0; i < position.count; i++) z = Math.max(z, position.getZ(i))
-      return z - front
+      // The knot's body: everything in front of the wrap, down to where the tails start.
+      for (let i = 0; i < position.count; i++) {
+        p.fromBufferAttribute(position, i)
+        if (p.z > front && p.y > strand.root.p.y + layout.width * 0.1) box.expandByPoint(p)
+      }
     }
+    body(knot.l)
+    body(knot.r)
     // Four layers of belt at its thickest.
-    expect(Math.max(reach(knot.l), reach(knot.r))).toBeGreaterThan(3.5 * layout.thickness)
+    expect(box.max.z - front).toBeGreaterThan(3.5 * layout.thickness)
+    // As far above the belt's center line as below it, give or take a few millimeters.
+    const beltY = WAIST_Y - 0.0015
+    expect(Math.abs((box.max.y + box.min.y) / 2 - beltY)).toBeLessThan(0.1 * layout.width)
+    expect(box.max.y - box.min.y).toBeLessThan(1.7 * layout.width)
   })
 
   it('builds fast enough to follow the waist slider', () => {
