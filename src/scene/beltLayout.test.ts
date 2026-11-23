@@ -18,7 +18,7 @@ describe('belt layout', () => {
 
   it('makes tails longer for bigger belts and shorter for bigger waists', () => {
     const base = computeBeltLayout(DEFAULT_CONFIG).tailLength
-    expect(computeBeltLayout({ ...DEFAULT_CONFIG, size: '6' }).tailLength).toBeGreaterThan(base)
+    expect(computeBeltLayout({ ...DEFAULT_CONFIG, size: '7' }).tailLength).toBeGreaterThan(base)
     expect(computeBeltLayout({ ...DEFAULT_CONFIG, waist: 100 }).tailLength).toBeLessThan(base)
   })
 

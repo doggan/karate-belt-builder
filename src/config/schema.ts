@@ -198,8 +198,8 @@ export const DEFAULT_CONFIG: BeltConfig = {
   color: 'black',
   stripes: { count: 0, color: 'gold', tail: 'l' },
   /** Size 5 is for ~180 cm wearers, matching the ~180 cm dogi model. */
-  size: '5',
-  waist: 85,
+  size: '6',
+  waist: 94,
   texts: [
     { text: '空手道', color: '436', weight: 3, charWidth: 'full' },
     { text: '', color: '436', weight: 3, charWidth: 'full' },
