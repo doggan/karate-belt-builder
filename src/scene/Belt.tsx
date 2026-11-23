@@ -118,12 +118,13 @@ export function Belt({ layout, config }: BeltProps) {
     () => () => {
       stitches.map.dispose()
       stitches.normalMap.dispose()
+      stitches.orm.dispose()
     },
     [stitches],
   )
 
   const materials = useMemo(() => {
-    const faces = new THREE.MeshStandardMaterial({ roughness: 0.78, metalness: 0 })
+    const faces = new THREE.MeshStandardMaterial({ roughness: 1, metalness: 0 })
     const edges = new THREE.MeshStandardMaterial({ roughness: 0.85, metalness: 0 })
     return { faces, edges, ribbon: [faces, edges] }
   }, [])
@@ -142,6 +143,10 @@ export function Belt({ layout, config }: BeltProps) {
     materials.faces.map = stitches.map
     materials.faces.normalMap = stitches.normalMap
     materials.faces.normalScale.set(1, 1)
+    materials.faces.aoMap = stitches.orm
+    materials.faces.aoMapIntensity = 1
+    materials.faces.roughnessMap = stitches.orm
+    materials.faces.roughness = 1
     materials.faces.needsUpdate = true
   }
 
@@ -178,23 +183,29 @@ interface TailEmbroideryProps {
   config: BeltConfig
 }
 
+/** The belt's stitching thread as it renders: the belt color, a shade darker (see stitching.ts). */
+function labelStitchHex(beltHex: string): string {
+  return '#' + new THREE.Color(beltHex).multiplyScalar(0.89).getHexString()
+}
+
 function TailEmbroidery({ side, geometry, layout, config }: TailEmbroideryProps) {
   const fontsVersion = useFontsVersion()
   const texts = [config.texts[tailIndex(side)]].filter((t) => t.text.trim())
   const logo = config.logo && side === config.logoTail
   const textsKey = JSON.stringify(texts)
+  const stitchHex = useMemo(() => labelStitchHex(beltColor(config.color).hex), [config.color])
 
   useEffect(() => {
     texts.forEach((t) => void loadGlyphs(EMBROIDERY_FONT, t.text))
     if (logo) {
       void loadGlyphs('mincho', BRAND_LABEL.mark)
-      void loadGlyphs('gothic', BRAND_LABEL.name)
+      void loadGlyphs('gothic', BRAND_LABEL.name + BRAND_LABEL.origin)
     }
   }, [textsKey, logo])
 
   const art = useMemo(
-    () => drawTailArt({ tailLength: layout.tailLength, width: layout.width, texts, logo }),
-    [layout.tailLength, layout.width, textsKey, logo, fontsVersion],
+    () => drawTailArt({ tailLength: layout.tailLength, width: layout.width, texts, logo, stitchHex }),
+    [layout.tailLength, layout.width, textsKey, logo, stitchHex, fontsVersion],
   )
   useEffect(() => () => art.dispose(), [art])
 

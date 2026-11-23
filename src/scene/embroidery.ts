@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { BRAND_LABEL, EMBROIDERY_FONT, threadColor, type FontId, type TailText, type TextWeight } from '../config/schema'
+import { BRAND_LABEL, EMBROIDERY_FONT, GI_THREAD_HEX, threadColor, type FontId, type TailText, type TextWeight } from '../config/schema'
 import { REFERENCE_LABEL } from '../config/reference'
 import { canvasFont } from './fonts'
 
@@ -120,6 +120,8 @@ export function drawTailArt(opts: {
   width: number
   texts: TailText[]
   logo: boolean
+  /** The belt's stitching thread color, for the label's border. */
+  stitchHex: string
 }): EmbroideryArt {
   const ppm = Math.min(PPM, MAX_CANVAS / opts.tailLength)
   const W = opts.width * ppm
@@ -135,8 +137,8 @@ export function drawTailArt(opts: {
     const lh = LABEL_LENGTH * ppm
     const lx = (W - lw) / 2
     const ly = cursor - lh
-    drawLabel(cc, lx, ly, lw, lh, false)
-    drawLabel(hc, lx, ly, lw, lh, true)
+    drawLabel(cc, lx, ly, lw, lh, false, opts.stitchHex)
+    drawLabel(hc, lx, ly, lw, lh, true, opts.stitchHex)
     cursor = ly - W * 0.35
   }
 
@@ -170,34 +172,48 @@ export function drawTailArt(opts: {
   return toArt(color, height, empty)
 }
 
-/** Generic black-and-red woven brand label: red seal with a black mark, red name below. */
-function drawLabel(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, isHeight: boolean) {
-  const { black, red, mark, name } = BRAND_LABEL
+/**
+ * Generic woven brand label: black base edged with a running stitch (`stitchHex`: the
+ * belt's own stitching thread on a tail, white on the jacket), a red mark, the red name,
+ * and small white "MADE IN JAPAN" along the bottom.
+ */
+function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  isHeight: boolean,
+  stitchHex: string,
+) {
+  const { black, red, mark, name, origin } = BRAND_LABEL
   ctx.save()
   ctx.textAlign = 'center'
   ctx.textBaseline = 'middle'
-  // Black woven base with a red border.
+  // Black woven base.
   ctx.fillStyle = isHeight ? '#777' : black
   roundRect(ctx, x, y, w, h, w * 0.06)
   ctx.fill()
-  ctx.strokeStyle = isHeight ? '#bbb' : red
-  ctx.lineWidth = w * 0.035
-  roundRect(ctx, x + w * 0.07, y + w * 0.07, w * 0.86, h - w * 0.14, w * 0.04)
+  // Running-stitch border just inside the edge (raised thread in the height map).
+  const inset = w * 0.075
+  ctx.strokeStyle = isHeight ? '#fff' : stitchHex
+  ctx.lineWidth = w * 0.022
+  ctx.lineCap = 'round'
+  ctx.setLineDash([w * 0.045, w * 0.03])
+  roundRect(ctx, x + inset, y + inset, w - 2 * inset, h - 2 * inset, w * 0.04)
   ctx.stroke()
-  // Red seal with the mark knocked out in black.
-  const seal = Math.min(w * 0.62, h * 0.42)
-  const sx = x + (w - seal) / 2
-  const sy = y + h * 0.4 - seal / 2
+  ctx.setLineDash([])
+  // Red mark.
   ctx.fillStyle = isHeight ? '#fff' : red
-  roundRect(ctx, sx, sy, seal, seal, seal * 0.08)
-  ctx.fill()
-  ctx.fillStyle = isHeight ? '#999' : black
-  ctx.font = canvasFont('mincho', seal * 0.78)
-  ctx.fillText(mark, x + w / 2, sy + seal / 2 + seal * 0.03)
-  // Name.
-  ctx.fillStyle = isHeight ? '#fff' : red
+  ctx.font = canvasFont('mincho', Math.min(w * 0.58, h * 0.36))
+  ctx.fillText(mark, x + w / 2, y + h * 0.37)
+  // Red name.
   ctx.font = canvasFont('gothic', w * 0.17)
-  ctx.fillText(name, x + w / 2, y + h * 0.78, w * 0.78)
+  ctx.fillText(name, x + w / 2, y + h * 0.68, w * 0.74)
+  // Small white origin line.
+  ctx.fillStyle = isHeight ? '#bbb' : '#cfcac0'
+  ctx.font = canvasFont('gothic', w * 0.075)
+  ctx.fillText(origin, x + w / 2, y + h * 0.83, w * 0.74)
   ctx.restore()
 }
 
@@ -276,8 +292,8 @@ export function drawHemArt(text: string, colorHex: string, withLabel: boolean): 
   if (withLabel) {
     const lx = (W - labelW) / 2
     const ly = y0 + textH + gap
-    drawLabel(cc, lx, ly, labelW, labelH, false)
-    drawLabel(hc, lx, ly, labelW, labelH, true)
+    drawLabel(cc, lx, ly, labelW, labelH, false, GI_THREAD_HEX)
+    drawLabel(hc, lx, ly, labelW, labelH, true, GI_THREAD_HEX)
   }
   return { ...toArt(color, height, chars.length === 0 && !withLabel), aspect: H / W }
 }

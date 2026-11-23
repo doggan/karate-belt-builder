@@ -1,6 +1,6 @@
 <img src="assets/icon.svg" width="64" height="64" alt="">
 
-# karate-belt-sim
+# Karate Belt Builder
 
 Preview a customized karate belt on a dogi in 3D, and share the customization as a link.
 

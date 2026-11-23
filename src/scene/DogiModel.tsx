@@ -281,7 +281,7 @@ function HemEmbroideryDecal({
     void loadGlyphs(EMBROIDERY_FONT, text)
     if (label) {
       void loadGlyphs('mincho', BRAND_LABEL.mark)
-      void loadGlyphs('gothic', BRAND_LABEL.name)
+      void loadGlyphs('gothic', BRAND_LABEL.name + BRAND_LABEL.origin)
     }
   }, [show, text, label])
 

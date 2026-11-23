@@ -1,4 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#16a34a"/>
-  <text x="32" y="32" dy="0.35em" text-anchor="middle" font-family="ui-sans-serif, system-ui, -apple-system, sans-serif" font-size="26" font-weight="600" fill="#ffffff">KB</text>
+  <!-- A black belt tied in a square knot, on a gi-white tile. -->
+  <rect width="64" height="64" rx="14" fill="#f1ede5"/>
+  <g fill="#161616">
+    <!-- Wrap around the waist. -->
+    <rect x="5" y="19" width="54" height="11" rx="2"/>
+    <!-- Tails splaying down from the knot. -->
+    <path d="M27.5 29 L35.5 29 L23 58 L13.5 55 Z"/>
+    <path d="M28.5 29 L36.5 29 L50.5 55 L41 58 Z"/>
+  </g>
+  <!-- Red label near the right tail's tip. -->
+  <path d="M45.2 50.6 L49.4 49.2 L51.3 52.8 L47.1 54.3 Z" fill="#c0262e"/>
+  <!-- Knot: a vertical band over the crossing, with a light edge so it reads at small sizes. -->
+  <rect x="24.5" y="14" width="15" height="21" rx="3" fill="#161616" stroke="#f1ede5" stroke-width="1.6"/>
+  <!-- Stitch rows. -->
+  <g stroke="#4a4a4a" stroke-width="0.9">
+    <line x1="6" y1="22.5" x2="23.5" y2="22.5"/>
+    <line x1="6" y1="26.5" x2="23.5" y2="26.5"/>
+    <line x1="40.5" y1="22.5" x2="58" y2="22.5"/>
+    <line x1="40.5" y1="26.5" x2="58" y2="26.5"/>
+    <line x1="29" y1="16" x2="29" y2="33"/>
+    <line x1="35" y1="16" x2="35" y2="33"/>
+  </g>
 </svg>

@@ -127,7 +127,9 @@ export type CharWidth = (typeof CHAR_WIDTHS)[number]['id']
 export const MAX_TEXT_LENGTH = 40
 
 /** A generic (fictional) brand label, black and red, sewn near the end of a tail. */
-export const BRAND_LABEL = { mark: '武', name: 'BUDŌ', black: '#141414', red: '#c0262e' } as const
+export const BRAND_LABEL = { mark: '武', name: 'BUDŌ', origin: 'MADE IN JAPAN', black: '#141414', red: '#c0262e' } as const
+/** Thread for stitching on the white jacket (the hem label's border). */
+export const GI_THREAD_HEX = '#f2f0ea'
 
 /** Black thread for embroidery stitched on the jacket (chest and hem). */
 export const BLACK_THREAD_HEX = '#141414'

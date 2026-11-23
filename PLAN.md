@@ -1,4 +1,4 @@
-# Karate Belt Simulator — Plan
+# Karate Belt Builder — Plan
 
 A frontend-only single-page app that lets someone preview a customized karate belt
 on a white dogi in 3D, then share that exact customization as a link.
