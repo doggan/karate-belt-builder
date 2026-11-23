@@ -19,7 +19,8 @@ import {
   type TextWeight,
 } from '../config/schema'
 import { computeBeltLayout } from '../scene/beltLayout'
-import { downloadScreenshot, focusCamera, focusWithoutCamera } from '../scene/canvasHandle'
+import { focusCamera, focusWithoutCamera } from '../scene/canvasHandle'
+import logoUrl from '../../assets/icon.svg'
 import { useBeltStore } from '../store'
 import { useUiStore, type FocusTarget } from '../uiStore'
 import { Field, Section, Segmented, Swatches, ThreadSelect, Toggle, useFlash } from './controls'
@@ -34,20 +35,7 @@ const tailName = (t: TailSide) => (t === 'l' ? 'left' : 'right')
 export function ControlPanel() {
   const config = useBeltStore((s) => s.config)
   const update = useBeltStore((s) => s.update)
-  const reset = useBeltStore((s) => s.reset)
   const tailCm = useMemo(() => Math.round(computeBeltLayout(config).tailLength * 100), [config])
-  const [copied, setCopied] = useState(false)
-
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(window.location.href)
-      setCopied(true)
-      window.setTimeout(() => setCopied(false), 1500)
-    } catch {
-      window.prompt('Copy this link:', window.location.href)
-    }
-  }
-
   const textSummary = TAIL_SIDES.map((side) => ({ side, text: config.texts[tailIndex(side)].text.trim() }))
     .filter((t) => t.text)
     .map((t) => `${t.text} (${tailName(t.side)})`)
@@ -56,7 +44,10 @@ export function ControlPanel() {
   return (
     <aside className="panel" aria-label="Belt options">
       <header className="panel-header">
-        <h1>Belt Builder</h1>
+        <h1>
+          <img className="logo" src={logoUrl} alt="" width={26} height={26} />
+          Belt Builder
+        </h1>
         <p className="muted">
           <span className="hint-mouse">Drag to rotate · scroll to zoom · right-drag or shift-drag to pan · click any part to edit it</span>
           <span className="hint-touch">Drag to rotate · pinch to zoom · two fingers to pan · tap any part to edit it</span>
@@ -213,50 +204,7 @@ export function ControlPanel() {
           />
         </Field>
       </Section>
-
-      <div className="actions">
-        <button type="button" className="primary" onClick={copyLink}>
-          {copied ? 'Link copied' : 'Copy share link'}
-        </button>
-        <div className="actions-row">
-          <button type="button" onClick={() => downloadScreenshot(`karate-belt-${config.color}.png`)}>
-            Download PNG
-          </button>
-          <button type="button" className="ghost" onClick={reset}>
-            Reset
-          </button>
-        </div>
-        <p className="credit">
-          <span>
-            Built by{' '}
-            <a href="https://shy.am/" target="_blank" rel="noopener noreferrer">
-              Shyam Guthikonda
-            </a>{' '}
-            in 2026
-          </span>
-          <a
-            className="credit-github"
-            href="https://github.com/doggan/karate-belt-builder"
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label="Source code on GitHub"
-            title="Source code on GitHub"
-          >
-            <GitHubIcon />
-          </a>
-        </p>
-      </div>
-
     </aside>
-  )
-}
-
-/** GitHub's mark, inline so it needs no extra request. */
-function GitHubIcon() {
-  return (
-    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="currentColor">
-      <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-    </svg>
   )
 }
 
