@@ -6,3 +6,6 @@ dist
 # Large source models; only optimized copies in public/ are committed
 assets/models/*-source.glb
 assets/models/*-prepared.glb
+
+# TypeScript incremental build cache
+*.tsbuildinfo
