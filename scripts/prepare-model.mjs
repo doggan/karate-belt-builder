@@ -30,12 +30,22 @@
  *
  * Then `npm run model:optimize` simplifies/compresses the result into public/models/dogi.glb.
  */
-import { writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { fileURLToPath } from 'node:url'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { NodeIO } from '@gltf-transform/core'
 import { prune } from '@gltf-transform/functions'
 import sharp from 'sharp'
 
 const [input = 'assets/models/dogi-source.glb', output = 'assets/models/dogi-prepared.glb'] = process.argv.slice(2)
+/**
+ * Second pass (see 3b): welded vertices of holes found next to the rebuilt region on the
+ * first pass. The region is grown over them so the rebuild closes them.
+ */
+const MOUTH_SEEDS_FILE = join(tmpdir(), 'dogi-hole-seeds.json')
+const mouthSeeds = process.env.DOGI_HOLE_SEEDS ? JSON.parse(readFileSync(MOUTH_SEEDS_FILE, 'utf8')) : []
 
 const WAIST_Y = 1.0
 /** Hem-of-pants to belt-center height in app space (m); sets the overall scale. */
@@ -66,6 +76,33 @@ const OVERSHOOT = 0.004
 const TENSION_LENGTH = 0.005
 /** Texture repaint: always paint this far past a rebuilt triangle (px); fill empty gutter texels up to GUTTER_PX. */
 const PAINT_DILATE_PX = 1
+/**
+ * Pinhole search over the whole gi: depth renders from this many directions at this pixel
+ * size, depth tolerance for "on the visible surface", largest hole mouth closed (perimeter),
+ * and how many rings around it are smoothed (source units).
+ */
+const VIS_VIEWS = 32
+const VIS_PX = 0.0008
+const VIS_TOL = 0.0012
+const PINHOLE_MAX_PERIMETER = 0.2
+const PINHOLE_SMOOTH_RINGS = 5
+/** Holes this close to the rebuilt region (source units) go back into it, with this much fabric round them. */
+const HOLE_NEAR_REGION = 0.02
+const HOLE_PATCH = 0.01
+/** Clean islands up to this many triangles enclosed by the region are folded into it. */
+const ISLAND_MAX = 1500
+/** Scan defects picked out by eye (app space: center in m, radius in m); see 3c. */
+const REPAIR_SPOTS = [
+  { at: [-0.057, 1.290, 0.138], radius: 0.022, note: 'chest, left of the lapel: jagged fold-edge step (upper part)' },
+  { at: [-0.041, 1.277, 0.142], radius: 0.022, note: 'chest, left of the lapel: jagged fold-edge step (lower end)' },
+  { at: [0.195, 1.058, 0.001], radius: 0.015, note: 'right side above the belt: dark speck' },
+]
+/** Extra rims of the region longer than this (source units) are not pinholes. */
+const PINHOLE_RIM_MAX = 0.3
+/** Hidden surface this close to a closed mouth is kept just under it (source units). */
+const PINHOLE_TUCK_REACH = 0.01
+/** A gap is a pinhole (not a hidden crevice, nor a glimpse of the inside) when both the visible surface around it and the hidden one behind it are at least this many triangles. */
+const PINHOLE_MIN_BEHIND = 20000
 const GUTTER_PX = 8
 
 const io = new NodeIO()
@@ -270,8 +307,15 @@ function fillIslands() {
     }
     sizes.push(size)
   }
-  const main = sizes.indexOf(Math.max(...sizes))
-  for (let t = 0; t < triCount; t++) if (!inBelt[t] && comp[t] !== main) inBelt[t] = 1
+  // Only small islands: a big piece cut off (e.g. skirt fabric between the region and the
+  // jacket's edge) stays jacket.
+  let absorbed = 0
+  for (let t = 0; t < triCount; t++)
+    if (!inBelt[t] && sizes[comp[t]] <= ISLAND_MAX) {
+      inBelt[t] = 1
+      absorbed++
+    }
+  return absorbed
 }
 fillIslands()
 
@@ -450,6 +494,19 @@ function outerRadius(keep) {
         stack.push(n)
       }
   }
+  // Second pass: take in the fabric around holes the first pass found at the region's edge.
+  if (mouthSeeds.length) {
+    const m = new Uint8Array(W)
+    for (const v of mouthSeeds) m[v] = 1
+    const d = geodesicFrom(m, HOLE_PATCH)
+    let added = 0
+    for (let t = 0; t < triCount; t++)
+      if (!inBelt[t] && d[T[t * 3]] <= HOLE_PATCH && d[T[t * 3 + 1]] <= HOLE_PATCH && d[T[t * 3 + 2]] <= HOLE_PATCH && inGrid(t) && isOuter(t)) {
+        inBelt[t] = 1
+        added++
+      }
+    console.log(`second pass: region grown by ${added} triangles round ${mouthSeeds.length} hole-rim vertices`)
+  }
   // Smooth the outline: take in any triangle with two or more edges on the region (notches).
   for (let pass = 0; pass < 3; pass++)
     for (let t = 0; t < triCount; t++) {
@@ -467,9 +524,19 @@ function outerRadius(keep) {
 // hole's tube becomes a hidden cone inside the wall).
 const apexes = []
 {
+  const perimeter = (loop) => {
+    const inLoop = new Set(loop)
+    let len = 0
+    for (const v of loop)
+      for (let q = vnbrs.start[v]; q < vnbrs.start[v + 1]; q++) {
+        const u = vnbrs.items[q]
+        if (inLoop.has(u)) len += Math.hypot(WP[u * 3] - WP[v * 3], WP[u * 3 + 1] - WP[v * 3 + 1], WP[u * 3 + 2] - WP[v * 3 + 2])
+      }
+    return len / 4 // each rim edge is seen from both ends, twice (closed manifold)
+  }
   const loops = boundaryLoops().sort((a, b) => b.length - a.length)
   const remap = new Int32Array(W).map((_, i) => i)
-  for (const loop of loops.slice(2)) {
+  for (const loop of loops.slice(2).filter((l) => perimeter(l) < PINHOLE_RIM_MAX)) {
     for (const v of loop) remap[v] = loop[0]
     apexes.push(loop[0])
   }
@@ -489,7 +556,7 @@ const apexes = []
     inBelt = Uint8Array.from(keepBelt)
     buildTopology()
   }
-  console.log(`closed ${apexes.length} pinholes (${loops.slice(2).map((l) => l.length).join(', ') || 'none'} rim vertices)`)
+  console.log(`closed ${apexes.length} pinholes in the region`)
 }
 /** Boundary loops of the region, as lists of welded vertex ids. */
 function boundaryLoops() {
@@ -558,7 +625,7 @@ for (let v = 0; v < W; v++) {
       edges.add(a < b ? a * W + b : b * W + a)
     }
   const chi = freeVerts.length + rimVerts.length - edges.size + regionTris.length
-  if (chi !== 0) console.warn(`warning: belt region Euler characteristic ${chi} (expected 0, an annulus)`)
+  if (chi !== 0) console.log(`note: belt region Euler characteristic ${chi} (0 = a clean annulus)`)
 }
 
 // ── 2a. The clean jacket around the region as a height field r(θ, y) ────────
@@ -1097,9 +1164,655 @@ async function encodeInto(img) {
   const buf = mime === 'image/png' ? await s.png().toBuffer() : await s.jpeg({ quality: 92 }).toBuffer()
   img.texture.setImage(new Uint8Array(buf))
 }
-for (const [m, img] of images.entries()) {
-  paintRegion(img, m)
-  await encodeInto(img)
+for (const [m, img] of images.entries()) paintRegion(img, m)
+
+let mainFace = null
+// ── 3b. Close the scan's other pinholes through the shell ───────────────────
+// Elsewhere on the gi the scan also has small holes through the wall: you look into them
+// and see the inside of the jacket. Find the surface that is visible from outside (depth
+// renders from many directions); a pinhole's mouth is a small gap in it. Collapse each
+// mouth to one vertex (the hole's tube becomes a hidden cone inside the wall) and smooth
+// the fabric around it.
+{
+  const visible = new Uint8Array(W)
+  const used = new Uint8Array(W)
+  for (let i = 0; i < T.length; i++) used[T[i]] = 1
+  for (let k = 0; k < VIS_VIEWS; k++) {
+    // Fibonacci sphere of view directions (d points toward the camera).
+    const yk = 1 - (2 * (k + 0.5)) / VIS_VIEWS
+    const rk = Math.sqrt(1 - yk * yk)
+    const phi = k * Math.PI * (3 - Math.sqrt(5))
+    const d = [rk * Math.cos(phi), yk, rk * Math.sin(phi)]
+    const up = Math.abs(d[1]) > 0.9 ? [1, 0, 0] : [0, 1, 0]
+    let u = [up[1] * d[2] - up[2] * d[1], up[2] * d[0] - up[0] * d[2], up[0] * d[1] - up[1] * d[0]]
+    const ul = Math.hypot(...u)
+    u = u.map((c) => c / ul)
+    const v = [d[1] * u[2] - d[2] * u[1], d[2] * u[0] - d[0] * u[2], d[0] * u[1] - d[1] * u[0]]
+    const pu = new Float32Array(W)
+    const pv = new Float32Array(W)
+    const pd = new Float32Array(W)
+    let u0 = Infinity
+    let v0 = Infinity
+    let u1 = -Infinity
+    let v1 = -Infinity
+    for (let i = 0; i < W; i++) {
+      if (!used[i]) continue
+      const x = WP[i * 3]
+      const y = WP[i * 3 + 1]
+      const z = WP[i * 3 + 2]
+      pu[i] = (x * u[0] + y * u[1] + z * u[2]) / VIS_PX
+      pv[i] = (x * v[0] + y * v[1] + z * v[2]) / VIS_PX
+      pd[i] = x * d[0] + y * d[1] + z * d[2]
+      u0 = Math.min(u0, pu[i])
+      v0 = Math.min(v0, pv[i])
+      u1 = Math.max(u1, pu[i])
+      v1 = Math.max(v1, pv[i])
+    }
+    const w = Math.ceil(u1 - u0) + 2
+    const h = Math.ceil(v1 - v0) + 2
+    const depth = new Float32Array(w * h).fill(-Infinity)
+    for (let t = 0; t < triCount; t++) {
+      const a = T[t * 3]
+      const b = T[t * 3 + 1]
+      const c = T[t * 3 + 2]
+      const ax = pu[a] - u0
+      const ay = pv[a] - v0
+      const bx = pu[b] - u0
+      const by = pv[b] - v0
+      const cx = pu[c] - u0
+      const cy = pv[c] - v0
+      const area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
+      if (area === 0) continue
+      const xa = Math.max(0, Math.floor(Math.min(ax, bx, cx)))
+      const xb = Math.min(w - 1, Math.ceil(Math.max(ax, bx, cx)))
+      const ya = Math.max(0, Math.floor(Math.min(ay, by, cy)))
+      const yb = Math.min(h - 1, Math.ceil(Math.max(ay, by, cy)))
+      for (let py = ya; py <= yb; py++)
+        for (let px = xa; px <= xb; px++) {
+          const sx = px + 0.5
+          const sy = py + 0.5
+          const l0 = ((bx - sx) * (cy - sy) - (cx - sx) * (by - sy)) / area
+          const l1 = ((cx - sx) * (ay - sy) - (ax - sx) * (cy - sy)) / area
+          const l2 = 1 - l0 - l1
+          if (l0 < -1e-6 || l1 < -1e-6 || l2 < -1e-6) continue
+          const z = l0 * pd[a] + l1 * pd[b] + l2 * pd[c]
+          const q = py * w + px
+          if (z > depth[q]) depth[q] = z
+        }
+    }
+    // A vertex is visible if it is (within tolerance) the front surface around its pixel.
+    for (let i = 0; i < W; i++) {
+      if (!used[i] || visible[i]) continue
+      const px = Math.floor(pu[i] - u0)
+      const py = Math.floor(pv[i] - v0)
+      let front = -Infinity
+      for (let dy = 0; dy <= 1; dy++)
+        for (let dx = 0; dx <= 1; dx++) {
+          const qx = Math.min(w - 1, px + dx - (pu[i] - u0 - px < 0.5 ? 1 : 0))
+          const qy = Math.min(h - 1, py + dy - (pv[i] - v0 - py < 0.5 ? 1 : 0))
+          if (qx >= 0 && qy >= 0) front = Math.max(front, depth[qy * w + qx])
+        }
+      if (pd[i] >= front - VIS_TOL) visible[i] = 1
+    }
+  }
+  const outer = new Uint8Array(triCount)
+  for (let t = 0; t < triCount; t++) outer[t] = visible[T[t * 3]] && visible[T[t * 3 + 1]] && visible[T[t * 3 + 2]] ? 1 : 0
+  // Single hidden triangles amid visible ones are just too small for the renders.
+  for (let pass = 0; pass < 2; pass++)
+    for (let t = 0; t < triCount; t++) if (!outer[t] && edgeNeighbors(t).every((n) => outer[n])) outer[t] = 1
+
+  // Hidden regions: a crevice the renders never saw is a small closed pocket; a real
+  // pinhole opens into the shell's inner surface, one huge hidden region.
+  const hiddenComp = new Int32Array(triCount).fill(-1)
+  const hiddenSize = []
+  for (let t = 0; t < triCount; t++) {
+    if (outer[t] || hiddenComp[t] >= 0) continue
+    const id = hiddenSize.length
+    let size = 0
+    const st = [t]
+    hiddenComp[t] = id
+    while (st.length) {
+      const q = st.pop()
+      size++
+      for (const n of edgeNeighbors(q)) if (!outer[n] && hiddenComp[n] < 0) (hiddenComp[n] = id, st.push(n))
+    }
+    hiddenSize.push(size)
+  }
+  const outerComp = new Int32Array(triCount).fill(-1)
+  const outerSize = []
+  for (let t = 0; t < triCount; t++) {
+    if (!outer[t] || outerComp[t] >= 0) continue
+    const id = outerSize.length
+    let size = 0
+    const st = [t]
+    outerComp[t] = id
+    while (st.length) {
+      const q = st.pop()
+      size++
+      for (const n of edgeNeighbors(q)) if (outer[n] && outerComp[n] < 0) (outerComp[n] = id, st.push(n))
+    }
+    outerSize.push(size)
+  }
+  mainFace = new Uint8Array(triCount)
+  for (let t = 0; t < triCount; t++) mainFace[t] = outer[t] && outerSize[outerComp[t]] >= PINHOLE_MIN_BEHIND ? 1 : 0
+  const edgeOuter = new Map()
+  for (let t = 0; t < triCount; t++) {
+    if (!outer[t]) continue
+    for (let j = 0; j < 3; j++) {
+      const a = T[t * 3 + j]
+      const b = T[t * 3 + ((j + 1) % 3)]
+      edgeOuter.set(a < b ? a * W + b : b * W + a, outerComp[t])
+    }
+  }
+  const edgeHidden = new Map() // boundary edge → its hidden triangle's component
+  for (let t = 0; t < triCount; t++) {
+    if (outer[t]) continue
+    for (let j = 0; j < 3; j++) {
+      const a = T[t * 3 + j]
+      const b = T[t * 3 + ((j + 1) % 3)]
+      edgeHidden.set(a < b ? a * W + b : b * W + a, hiddenComp[t])
+    }
+  }
+
+  // Gaps in the visible surface: boundary loops of `outer`.
+  const count = new Map()
+  for (let t = 0; t < triCount; t++) {
+    if (!outer[t]) continue
+    for (let j = 0; j < 3; j++) {
+      const a = T[t * 3 + j]
+      const b = T[t * 3 + ((j + 1) % 3)]
+      const key = a < b ? a * W + b : b * W + a
+      count.set(key, (count.get(key) || 0) + 1)
+    }
+  }
+  const adj = new Map()
+  for (const [key, c] of count) {
+    if (c !== 1) continue
+    const a = Math.floor(key / W)
+    const b = key % W
+    for (const [p, q] of [[a, b], [b, a]]) {
+      if (!adj.has(p)) adj.set(p, [])
+      adj.get(p).push(q)
+    }
+  }
+  const seen = new Set()
+  const mouths = []
+  for (const s of adj.keys()) {
+    if (seen.has(s)) continue
+    const loop = []
+    let length = 0
+    let simple = true
+    let behind = 0
+    const st = [s]
+    seen.add(s)
+    while (st.length) {
+      const p = st.pop()
+      loop.push(p)
+      const ns = adj.get(p)
+      if (ns.length !== 2) simple = false
+      for (const q of ns) {
+        length += Math.hypot(WP[q * 3] - WP[p * 3], WP[q * 3 + 1] - WP[p * 3 + 1], WP[q * 3 + 2] - WP[p * 3 + 2]) / 2
+        const ek = p < q ? p * W + q : q * W + p
+        behind = Math.max(behind, Math.min(hiddenSize[edgeHidden.get(ek)] || 0, outerSize[edgeOuter.get(ek)] || 0))
+        if (!seen.has(q)) (seen.add(q), st.push(q))
+      }
+    }
+    if (simple && loop.length >= 3 && length < PINHOLE_MAX_PERIMETER && behind >= PINHOLE_MIN_BEHIND) mouths.push(loop)
+  }
+
+  // Holes at the rebuilt region's edge are best closed by the rebuild itself: on the first
+  // pass, record them and run once more with the region grown over them.
+  if (!process.env.DOGI_HOLE_SEEDS) {
+    const m = new Uint8Array(W)
+    for (let v = 0; v < W; v++) if (vstate[v] === VERT_FREE || vstate[v] === VERT_RIM) m[v] = 1
+    const d = geodesicFrom(m, HOLE_NEAR_REGION)
+    const seeds = mouths.filter((l) => Math.min(...l.map((v) => d[v])) <= HOLE_NEAR_REGION).flat()
+    if (seeds.length) {
+      writeFileSync(MOUTH_SEEDS_FILE, JSON.stringify(seeds))
+      console.log(`found ${mouths.length} holes at the rebuilt region's edge; second pass…`)
+      const run = spawnSync(process.execPath, [fileURLToPath(import.meta.url), input, output], {
+        stdio: 'inherit',
+        env: { ...process.env, DOGI_HOLE_SEEDS: '1' },
+      })
+      process.exit(run.status ?? 1)
+    }
+  }
+  // Zip each mouth shut: repeatedly merge the two rim neighbours either side of its sharpest
+  // turn (at their midpoint). A slit closes like a seam; a round hole closes to a point.
+  const remap = new Int32Array(W).map((_, i) => i)
+  const find = (v) => {
+    while (remap[v] !== v) v = remap[v] = remap[remap[v]]
+    return v
+  }
+  const apexList = []
+  const dist3 = (a, b) => Math.hypot(WP[a * 3] - WP[b * 3], WP[a * 3 + 1] - WP[b * 3 + 1], WP[a * 3 + 2] - WP[b * 3 + 2])
+  for (const set of mouths) {
+    // Order the rim.
+    const inSet = new Set(set)
+    const loop = [set[0]]
+    let prev = -1
+    for (;;) {
+      const cur = loop[loop.length - 1]
+      const next = adj.get(cur).find((q) => q !== prev && inSet.has(q))
+      if (next === undefined || next === loop[0]) break
+      prev = cur
+      loop.push(next)
+    }
+    if (loop.length !== set.length) continue
+    while (loop.length > 2) {
+      let best = 0
+      let bestD = Infinity
+      for (let i = 0; i < loop.length; i++) {
+        // The sharpest turn in the rim (a slit's end): its neighbours face each other across
+        // the gap, so merging them zips across it rather than along one side.
+        const p0 = loop[(i - 1 + loop.length) % loop.length]
+        const p1 = loop[(i + 1) % loop.length]
+        const d = dist3(p0, p1) / (dist3(p0, loop[i]) + dist3(loop[i], p1) || 1)
+        if (d < bestD) (bestD = d), (best = i)
+      }
+      const ia = (best - 1 + loop.length) % loop.length
+      const ib = (best + 1) % loop.length
+      const a = loop[ia]
+      const b = loop[ib]
+      for (let k = 0; k < 3; k++) WP[a * 3 + k] = (WP[a * 3 + k] + WP[b * 3 + k]) / 2
+      remap[b] = a
+      // Drop the zipped vertex and b from the rim (b is now a).
+      const drop = new Set([best, ib])
+      const kept = loop.filter((_, i) => !drop.has(i))
+      loop.length = 0
+      loop.push(...kept)
+    }
+    if (loop.length === 2) {
+      for (let k = 0; k < 3; k++) WP[loop[0] * 3 + k] = (WP[loop[0] * 3 + k] + WP[loop[1] * 3 + k]) / 2
+      remap[loop[1]] = loop[0]
+    }
+    apexList.push(...set)
+  }
+  for (let v = 0; v < W; v++) remap[v] = find(v)
+  for (let i = 0; i < apexList.length; i++) apexList[i] = remap[apexList[i]]
+  const apexSet = new Set(apexList)
+  if (apexList.length) {
+    for (let v = 0; v < vertCount; v++) weldId[v] = remap[weldId[v]]
+    const keepI = []
+    const keepOuter = []
+    const keepMain = []
+    for (let t = 0; t < triCount; t++) {
+      const [a, b, c] = [0, 1, 2].map((j) => weldId[I[t * 3 + j]])
+      if (a === b || b === c || a === c) continue
+      keepI.push(I[t * 3], I[t * 3 + 1], I[t * 3 + 2])
+      keepOuter.push(outer[t] || [a, b, c].some((x) => apexSet.has(x)) ? 1 : 0)
+      keepMain.push((outer[t] && outerSize[outerComp[t]] >= PINHOLE_MIN_BEHIND) || [a, b, c].some((x) => apexSet.has(x)) ? 1 : 0)
+    }
+    I = Uint32Array.from(keepI)
+    triCount = I.length / 3
+    buildTopology()
+    const isOuter = Uint8Array.from(keepMain)
+    const isMain = isOuter
+    mainFace = isMain
+    // Smooth the visible fabric around each closed mouth (only along visible faces, so the
+    // hidden cone doesn't pull on it), fading out over a few rings.
+    const ringOf = new Map([...apexSet].map((v) => [v, 0]))
+    let ring = [...apexSet]
+    for (let r = 1; r <= PINHOLE_SMOOTH_RINGS; r++) {
+      const next = []
+      for (const v of ring)
+        for (let k = vtris.start[v]; k < vtris.start[v + 1]; k++) {
+          const t = vtris.items[k]
+          if (!isOuter[t]) continue
+          for (let j = 0; j < 3; j++) {
+            const u = T[t * 3 + j]
+            if (!ringOf.has(u)) (ringOf.set(u, r), next.push(u))
+          }
+        }
+      ring = next
+    }
+    const nbrs = (v) => {
+      const out = new Set()
+      for (let k = vtris.start[v]; k < vtris.start[v + 1]; k++) {
+        const t = vtris.items[k]
+        if (isOuter[t]) for (let j = 0; j < 3; j++) if (T[t * 3 + j] !== v) out.add(T[t * 3 + j])
+      }
+      return [...out]
+    }
+    const zone = [...ringOf.keys()].filter((v) => ringOf.get(v) < PINHOLE_SMOOTH_RINGS)
+    // Like the belt band: keep each vertex's own (θ, y) around the body axis and solve its
+    // radius smoothly from the undisturbed ring around it, so the closed seam (whose lips may
+    // have overlapped, as at a fold) lies on one smooth surface.
+    {
+      const inZone = new Set(ringOf.keys())
+      const th = new Map()
+      const rr = new Map()
+      for (const v of inZone) {
+        th.set(v, thetaOf(WP[v * 3], WP[v * 3 + 2]))
+        rr.set(v, radiusOf(v))
+      }
+      const nb = zone.map((v) => {
+        const out = []
+        for (let q = vnbrs.start[v]; q < vnbrs.start[v + 1]; q++) if (inZone.has(vnbrs.items[q])) out.push(vnbrs.items[q])
+        return out
+      })
+      for (let it = 0; it < 400; it++)
+        zone.forEach((v, i) => {
+          if (nb[i].length) rr.set(v, nb[i].reduce((sum, u) => sum + rr.get(u), 0) / nb[i].length)
+        })
+      for (const v of zone) {
+        WP[v * 3] = axX + rr.get(v) * Math.cos(th.get(v))
+        WP[v * 3 + 2] = axZ + rr.get(v) * Math.sin(th.get(v))
+      }
+      // Faces folded over in that view now lie flat on the surface: turn them to face out.
+      let turned = 0
+      for (let t = 0; t < triCount; t++) {
+        if (!isOuter[t] || ![0, 1, 2].some((j) => ringOf.get(T[t * 3 + j]) < PINHOLE_SMOOTH_RINGS)) continue
+        const f = faceNormal(t)
+        const c = [0, 2].map((k) => (WP[T[t * 3] * 3 + k] + WP[T[t * 3 + 1] * 3 + k] + WP[T[t * 3 + 2] * 3 + k]) / 3)
+        if (f[0] * (c[0] - axX) + f[2] * (c[1] - axZ) >= 0) continue
+        ;[I[t * 3 + 1], I[t * 3 + 2]] = [I[t * 3 + 2], I[t * 3 + 1]]
+        ;[T[t * 3 + 1], T[t * 3 + 2]] = [T[t * 3 + 2], T[t * 3 + 1]]
+        turned++
+      }
+      if (turned) console.log(`  ${turned} folded faces at the closed seams turned outward`)
+    }
+    // Whatever was inside the hole (its walls, bits of the inside seen through it) must stay
+    // under the closed-up fabric: push any such vertex near a mouth that pokes out to just
+    // inside it.
+    const touched = new Set(ringOf.keys())
+    {
+      const zoneSet = new Set(zone)
+      const surfaceNormal = (v) => {
+        const n = [0, 0, 0]
+        for (let k = vtris.start[v]; k < vtris.start[v + 1]; k++) {
+          const t = vtris.items[k]
+          if (!isOuter[t]) continue
+          const f = faceNormal(t)
+          for (let c = 0; c < 3; c++) n[c] += f[c]
+        }
+        const l = Math.hypot(...n) || 1
+        return n.map((c) => c / l)
+      }
+      const anchors = zone.map((v) => [v, surfaceNormal(v)]).filter(([, n]) => n.some((c) => c !== 0))
+      const lo = [0, 1, 2].map((k) => Math.min(...zone.map((v) => WP[v * 3 + k])) - PINHOLE_TUCK_REACH)
+      const hi = [0, 1, 2].map((k) => Math.max(...zone.map((v) => WP[v * 3 + k])) + PINHOLE_TUCK_REACH)
+      const mainVert = new Uint8Array(W)
+      for (let t = 0; t < triCount; t++) if (isMain[t]) for (let j = 0; j < 3; j++) mainVert[T[t * 3 + j]] = 1
+      for (let u = 0; u < W; u++) {
+        if (mainVert[u] || vtris.start[u] === vtris.start[u + 1]) continue
+        if ([0, 1, 2].some((k) => WP[u * 3 + k] < lo[k] || WP[u * 3 + k] > hi[k])) continue
+        let best = null
+        let bd = PINHOLE_TUCK_REACH
+        for (const an of anchors) {
+          const a = an[0]
+          const d = Math.hypot(WP[u * 3] - WP[a * 3], WP[u * 3 + 1] - WP[a * 3 + 1], WP[u * 3 + 2] - WP[a * 3 + 2])
+          if (d < bd) (bd = d), (best = an)
+        }
+        if (!best) continue
+        const [a, n] = best
+        const off = (WP[u * 3] - WP[a * 3]) * n[0] + (WP[u * 3 + 1] - WP[a * 3 + 1]) * n[1] + (WP[u * 3 + 2] - WP[a * 3 + 2]) * n[2]
+        const target = -0.0015
+        if (off <= target) continue
+        for (let c = 0; c < 3; c++) WP[u * 3 + c] -= (off - target) * n[c]
+        touched.add(u)
+      }
+    }
+    // Write back positions and normals (visible faces only) around the closed mouths.
+    const nrmOf = new Map()
+    for (const v of touched) {
+      const n = [0, 0, 0]
+      for (let k = vtris.start[v]; k < vtris.start[v + 1]; k++) {
+        const t = vtris.items[k]
+        if (!isOuter[t]) continue
+        const f = faceNormal(t)
+        for (let c = 0; c < 3; c++) n[c] += f[c]
+      }
+      const l = Math.hypot(...n) || 1
+      nrmOf.set(v, n.map((c) => c / l))
+    }
+    for (let v = 0; v < vertCount; v++) {
+      const w = weldId[v]
+      if (!touched.has(w)) continue
+      for (let c = 0; c < 3; c++) {
+        P[v * 3 + c] = WP[w * 3 + c]
+        N[v * 3 + c] = nrmOf.get(w)[c]
+      }
+    }
+  }
+  // The scan baked dark shading into the holes' rims: repaint the fabric right around each
+  // closed mouth with the color of the clean fabric a few rings out.
+  if (apexSet.size) {
+    const ringAll = new Map([...apexSet].map((v) => [v, 0]))
+    let ring = [...apexSet]
+    for (let r = 1; r <= 5; r++) {
+      const next = []
+      for (const v of ring)
+        for (let q = vnbrs.start[v]; q < vnbrs.start[v + 1]; q++) {
+          const u = vnbrs.items[q]
+          if (!ringAll.has(u)) (ringAll.set(u, r), next.push(u))
+        }
+      ring = next
+    }
+    const triRing = (t) => Math.max(ringAll.get(T[t * 3]) ?? 9, ringAll.get(T[t * 3 + 1]) ?? 9, ringAll.get(T[t * 3 + 2]) ?? 9)
+    const samples = images.map(() => [[], [], []])
+    const paintTris = []
+    for (let t = 0; t < triCount; t++) {
+      const r = triRing(t)
+      if (r <= 3) paintTris.push(t)
+      else if (r <= 5) {
+        const u = (UV[I[t * 3] * 2] + UV[I[t * 3 + 1] * 2] + UV[I[t * 3 + 2] * 2]) / 3
+        const w = (UV[I[t * 3] * 2 + 1] + UV[I[t * 3 + 1] * 2 + 1] + UV[I[t * 3 + 2] * 2 + 1]) / 3
+        if (lum(u, w) < 120) continue
+        images.forEach((img, m) => {
+          const k = texel(img, u, w)
+          for (let c = 0; c < 3; c++) samples[m][c].push(img.data[k + c])
+        })
+      }
+    }
+    if (samples[0][0].length)
+      images.forEach((img, m) => {
+        const color = samples[m].map((ch) => pct(ch, 0.5))
+        for (const t of paintTris) fillTriangleUV(img, t, color)
+      })
+  }
+  console.log(`closed ${mouths.length} pinholes and slits elsewhere on the gi (${mouths.map((l) => l.length).join(', ')} rim vertices)`)
+}
+
+// ── 3c. Repair spots ────────────────────────────────────────────────────────
+// A few scan defects no general rule above catches well (a jagged fold edge, baked-in dark
+// specks) were picked out by eye. At each spot (app-space center, radius in m): smooth the
+// visible fabric into a soft membrane held by its rim, keep whatever lies under it hidden,
+// and repaint its texture with colors blended in from the rim.
+{
+  const sc = HEM_TO_WAIST / (beltY - minY)
+  const toSource = ([x, y, z]) => [z / sc, (y - WAIST_Y) / sc + beltY, -x / sc] // ±1 mm (ignores the waist re-centering)
+  const visibleVert = new Uint8Array(W)
+  if (mainFace) for (let t = 0; t < triCount; t++) if (mainFace[t]) for (let j = 0; j < 3; j++) visibleVert[T[t * 3 + j]] = 1
+  const dist3v = (v, p) => Math.hypot(WP[v * 3] - p[0], WP[v * 3 + 1] - p[1], WP[v * 3 + 2] - p[2])
+  for (const spot of REPAIR_SPOTS) {
+    const c = toSource(spot.at)
+    const r = spot.radius / sc
+    // Nearest visible vertex, then geodesic distance over visible faces only.
+    let seed = -1
+    let sd = Infinity
+    for (let v = 0; v < W; v++) if (visibleVert[v] && dist3v(v, c) < sd) (sd = dist3v(v, c)), (seed = v)
+    if (seed < 0 || sd > r) {
+      console.warn(`repair spot "${spot.note}": no surface near ${spot.at}`)
+      continue
+    }
+    const d = new Map([[seed, 0]])
+    const queue = [seed]
+    for (let k = 0; k < queue.length; k++) {
+      const v = queue[k]
+      for (let q = vtris.start[v]; q < vtris.start[v + 1]; q++) {
+        const t = vtris.items[q]
+        if (!mainFace[t]) continue
+        for (let j = 0; j < 3; j++) {
+          const u = T[t * 3 + j]
+          const nd = d.get(v) + Math.hypot(WP[u * 3] - WP[v * 3], WP[u * 3 + 1] - WP[v * 3 + 1], WP[u * 3 + 2] - WP[v * 3 + 2])
+          if (nd < r && nd < (d.get(u) ?? Infinity)) {
+            d.set(u, nd)
+            queue.push(u)
+          }
+        }
+      }
+    }
+    const patch = [...d.keys()]
+    const inner = patch.filter((v) => d.get(v) < r * 0.85)
+    const innerSet = new Set(inner)
+    const nbrs = inner.map((v) => {
+      const out = new Set()
+      for (let q = vtris.start[v]; q < vtris.start[v + 1]; q++) {
+        const t = vtris.items[q]
+        if (mainFace[t]) for (let j = 0; j < 3; j++) if (T[t * 3 + j] !== v && d.has(T[t * 3 + j])) out.add(T[t * 3 + j])
+      }
+      return [...out]
+    })
+    // Membrane: harmonic positions with the outer ring fixed, blended in by distance.
+    const H = new Map(patch.map((v) => [v, [WP[v * 3], WP[v * 3 + 1], WP[v * 3 + 2]]]))
+    for (let it = 0; it < 600; it++)
+      inner.forEach((v, i) => {
+        if (!nbrs[i].length) return
+        const m = [0, 0, 0]
+        for (const u of nbrs[i]) for (let k = 0; k < 3; k++) m[k] += H.get(u)[k]
+        H.set(v, m.map((x) => x / nbrs[i].length))
+      })
+    const moved = new Set()
+    for (const v of inner) {
+      const t = Math.min(1, (r * 0.85 - d.get(v)) / (r * 0.35))
+      const w = t * t * (3 - 2 * t)
+      for (let k = 0; k < 3; k++) WP[v * 3 + k] += w * (H.get(v)[k] - WP[v * 3 + k])
+      moved.add(v)
+    }
+    // Patch normals, then keep hidden geometry nearby under the new surface.
+    const vn = new Map()
+    for (const v of patch) {
+      const n = [0, 0, 0]
+      for (let q = vtris.start[v]; q < vtris.start[v + 1]; q++) {
+        const t = vtris.items[q]
+        if (!mainFace[t]) continue
+        const f = faceNormal(t)
+        for (let k = 0; k < 3; k++) n[k] += f[k]
+      }
+      const l = Math.hypot(...n) || 1
+      vn.set(v, n.map((x) => x / l))
+    }
+    for (let u = 0; u < W; u++) {
+      if (visibleVert[u] || dist3v(u, c) > r * 1.2 || vtris.start[u] === vtris.start[u + 1]) continue
+      let best = -1
+      let bd = Infinity
+      for (const v of inner) {
+        const dd = Math.hypot(WP[u * 3] - WP[v * 3], WP[u * 3 + 1] - WP[v * 3 + 1], WP[u * 3 + 2] - WP[v * 3 + 2])
+        if (dd < bd) (bd = dd), (best = v)
+      }
+      if (best < 0) continue
+      const n = vn.get(best)
+      const off = (WP[u * 3] - WP[best * 3]) * n[0] + (WP[u * 3 + 1] - WP[best * 3 + 1]) * n[1] + (WP[u * 3 + 2] - WP[best * 3 + 2]) * n[2]
+      const target = -0.0012
+      if (off <= target) continue
+      for (let k = 0; k < 3; k++) WP[u * 3 + k] -= (off - target) * n[k]
+      moved.add(u)
+    }
+    // Recompute normals of the patch (visible faces) after the move.
+    for (const v of patch) {
+      const n = [0, 0, 0]
+      for (let q = vtris.start[v]; q < vtris.start[v + 1]; q++) {
+        const t = vtris.items[q]
+        if (!mainFace[t]) continue
+        const f = faceNormal(t)
+        for (let k = 0; k < 3; k++) n[k] += f[k]
+      }
+      const l = Math.hypot(...n) || 1
+      vn.set(v, n.map((x) => x / l))
+    }
+    for (let v = 0; v < vertCount; v++) {
+      const w = weldId[v]
+      if (moved.has(w)) for (let k = 0; k < 3; k++) P[v * 3 + k] = WP[w * 3 + k]
+      if (vn.has(w)) for (let k = 0; k < 3; k++) N[v * 3 + k] = vn.get(w)[k]
+    }
+    // Texture: rim colors (light fabric texels only) carried smoothly across the patch.
+    const patchTris = []
+    for (let t = 0; t < triCount; t++) if (mainFace[t] && [0, 1, 2].every((j) => d.has(T[t * 3 + j]))) patchTris.push(t)
+    const uvOf = new Map() // welded vertex → a UV of one of its copies in the patch
+    for (const t of patchTris) for (let j = 0; j < 3; j++) uvOf.set(T[t * 3 + j], I[t * 3 + j])
+    const col = new Map()
+    const rim = patch.filter((v) => !innerSet.has(v))
+    const light = rim.filter((v) => uvOf.has(v) && lum(UV[uvOf.get(v) * 2], UV[uvOf.get(v) * 2 + 1]) >= 120)
+    const fallback = images.map((img) => [0, 1, 2].map((ch) => pct(light.map((v) => img.data[texel(img, UV[uvOf.get(v) * 2], UV[uvOf.get(v) * 2 + 1]) + ch]), 0.5)))
+    for (const v of patch) col.set(v, images.map((img, m) => fallback[m].slice()))
+    for (const v of light) col.set(v, images.map((img) => [0, 1, 2].map((ch) => img.data[texel(img, UV[uvOf.get(v) * 2], UV[uvOf.get(v) * 2 + 1]) + ch])))
+    const fixedCol = new Set(light)
+    for (let it = 0; it < 300; it++)
+      inner.forEach((v, i) => {
+        if (fixedCol.has(v) || !nbrs[i].length) return
+        col.set(v, images.map((_, m) => [0, 1, 2].map((ch) => nbrs[i].reduce((s, u) => s + col.get(u)[m][ch], 0) / nbrs[i].length)))
+      })
+    images.forEach((img, m) => {
+      for (const t of patchTris) {
+        if (![0, 1, 2].some((j) => innerSet.has(T[t * 3 + j]))) continue
+        paintTriangleColors(img, t, [0, 1, 2].map((j) => col.get(T[t * 3 + j])[m]))
+      }
+    })
+    console.log(`repair spot "${spot.note}": ${inner.length} vertices smoothed, ${patchTris.length} triangles repainted`)
+  }
+}
+
+/** Paint triangle t's texels (plus a pixel of margin) interpolating the three vertex colors. */
+function paintTriangleColors(img, t, colors) {
+  const { data, w, h } = img
+  const pts = [0, 1, 2].map((j) => {
+    const v = I[t * 3 + j]
+    return [(UV[v * 2] - Math.floor(UV[v * 2])) * w, (UV[v * 2 + 1] - Math.floor(UV[v * 2 + 1])) * h]
+  })
+  const xs = pts.map((p) => p[0])
+  const ys = pts.map((p) => p[1])
+  const x0 = Math.max(0, Math.floor(Math.min(...xs) - 1))
+  const x1 = Math.min(w - 1, Math.ceil(Math.max(...xs) + 1))
+  const y0 = Math.max(0, Math.floor(Math.min(...ys) - 1))
+  const y1 = Math.min(h - 1, Math.ceil(Math.max(...ys) + 1))
+  if (x1 - x0 > w / 2 || y1 - y0 > h / 2) return
+  const [[ax, ay], [bx, by], [cx, cy]] = pts
+  const area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
+  if (Math.abs(area) < 1e-12) return
+  const lens = [Math.hypot(cx - bx, cy - by), Math.hypot(ax - cx, ay - cy), Math.hypot(bx - ax, by - ay)]
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      let l0 = ((bx - x - 0.5) * (cy - y - 0.5) - (cx - x - 0.5) * (by - y - 0.5)) / area
+      let l1 = ((cx - x - 0.5) * (ay - y - 0.5) - (ax - x - 0.5) * (cy - y - 0.5)) / area
+      let l2 = 1 - l0 - l1
+      const out = Math.max(0, (-l0 * Math.abs(area)) / lens[0], (-l1 * Math.abs(area)) / lens[1], (-l2 * Math.abs(area)) / lens[2])
+      if (out > 1) continue
+      ;[l0, l1, l2] = [l0, l1, l2].map((l) => Math.max(0, l))
+      const s = l0 + l1 + l2 || 1
+      for (let ch = 0; ch < 3; ch++) data[(y * w + x) * 3 + ch] = Math.round((l0 * colors[0][ch] + l1 * colors[1][ch] + l2 * colors[2][ch]) / s)
+    }
+}
+
+for (const img of images) await encodeInto(img)
+
+/** Paint triangle t's texels (plus a pixel of margin) in one flat color. */
+function fillTriangleUV(img, t, color) {
+  const { data, w, h } = img
+  const pts = [0, 1, 2].map((j) => {
+    const v = I[t * 3 + j]
+    return [(UV[v * 2] - Math.floor(UV[v * 2])) * w, (UV[v * 2 + 1] - Math.floor(UV[v * 2 + 1])) * h]
+  })
+  const xs = pts.map((p) => p[0])
+  const ys = pts.map((p) => p[1])
+  const x0 = Math.max(0, Math.floor(Math.min(...xs) - 1))
+  const x1 = Math.min(w - 1, Math.ceil(Math.max(...xs) + 1))
+  const y0 = Math.max(0, Math.floor(Math.min(...ys) - 1))
+  const y1 = Math.min(h - 1, Math.ceil(Math.max(...ys) + 1))
+  if (x1 - x0 > w / 2 || y1 - y0 > h / 2) return
+  const [[ax, ay], [bx, by], [cx, cy]] = pts
+  const area = (bx - ax) * (cy - ay) - (cx - ax) * (by - ay)
+  if (Math.abs(area) < 1e-12) return
+  const lens = [Math.hypot(cx - bx, cy - by), Math.hypot(ax - cx, ay - cy), Math.hypot(bx - ax, by - ay)]
+  for (let y = y0; y <= y1; y++)
+    for (let x = x0; x <= x1; x++) {
+      const l0 = ((bx - x - 0.5) * (cy - y - 0.5) - (cx - x - 0.5) * (by - y - 0.5)) / area
+      const l1 = ((cx - x - 0.5) * (ay - y - 0.5) - (ax - x - 0.5) * (cy - y - 0.5)) / area
+      const l2 = 1 - l0 - l1
+      const out = Math.max(0, (-l0 * Math.abs(area)) / lens[0], (-l1 * Math.abs(area)) / lens[1], (-l2 * Math.abs(area)) / lens[2])
+      if (out > 1) continue
+      for (let c = 0; c < 3; c++) data[(y * w + x) * 3 + c] = color[c]
+    }
 }
 
 // ── 4. Measure the waist cross-section (source units) ───────────────────────
