@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import { THREAD_COLORS, threadColor, type ThreadColorId } from '../config/schema'
 import { useUiStore, type SectionId } from '../uiStore'
 
@@ -215,6 +215,47 @@ export function ThreadSelect({ id, value, onChange }: { id: string; value: Threa
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  )
+}
+
+interface TextInputProps {
+  value: string
+  onChange: (value: string) => void
+  placeholder?: string
+  id?: string
+  lang?: string
+  'aria-label': string
+  ref?: Ref<HTMLInputElement>
+}
+
+/** A text box with an × that clears it (shown once there's something to clear). */
+export function TextInput({ value, onChange, ref, ...rest }: TextInputProps) {
+  const own = useRef<HTMLInputElement | null>(null)
+  const setRef = (el: HTMLInputElement | null) => {
+    own.current = el
+    if (typeof ref === 'function') ref(el)
+    else if (ref) ref.current = el
+  }
+  return (
+    <div className="text-input">
+      <input ref={setRef} type="text" value={value} onChange={(e) => onChange(e.target.value)} {...rest} />
+      {value && (
+        <button
+          type="button"
+          className="text-clear"
+          aria-label={`Clear ${rest['aria-label'].toLowerCase()}`}
+          title="Clear"
+          onClick={() => {
+            onChange('')
+            own.current?.focus()
+          }}
+        >
+          <svg viewBox="0 0 24 24" width={14} height={14} aria-hidden="true" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round">
+            <path d="M6 6l12 12M18 6 6 18" />
+          </svg>
+        </button>
       )}
     </div>
   )

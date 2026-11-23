@@ -23,7 +23,7 @@ import { focusCamera, focusWithoutCamera } from '../scene/canvasHandle'
 import logoUrl from '../../assets/icon.svg'
 import { useBeltStore } from '../store'
 import { useUiStore, type FocusTarget } from '../uiStore'
-import { Field, Section, Segmented, Swatches, ThreadSelect, Toggle, useFlash } from './controls'
+import { Field, Section, Segmented, Swatches, TextInput, ThreadSelect, Toggle, useFlash } from './controls'
 
 const TAIL_OPTIONS = [
   { value: 'l', label: 'Left tail' },
@@ -137,13 +137,12 @@ export function ControlPanel() {
           />
           {config.chest.show && (
             <>
-              <input
-                type="text"
+              <TextInput
                 lang="ja"
                 aria-label="Chest kanji"
                 placeholder="空手道"
                 value={config.chest.text}
-                onChange={(e) => update({ chest: { ...config.chest, text: e.target.value } })}
+                onChange={(text) => update({ chest: { ...config.chest, text } })}
               />
               <Field
                 label={`Size · ${(config.chest.size / 10).toFixed(1)} cm per character`}
@@ -172,13 +171,12 @@ export function ControlPanel() {
           />
           {config.hem.show && (
             <>
-              <input
-                type="text"
+              <TextInput
                 lang="ja"
                 aria-label="Hem embroidery text"
                 placeholder="山田"
                 value={config.hem.text}
-                onChange={(e) => update({ hem: { ...config.hem, text: e.target.value } })}
+                onChange={(text) => update({ hem: { ...config.hem, text } })}
               />
               <p className="muted">Black thread, written up the front edge where the jacket closes, slanted with the collar, just above the hem.</p>
               <Toggle
@@ -260,15 +258,14 @@ function TailTextControls({ side, pulse, targeted, inputRef }: TailTextControlsP
   return (
     <fieldset className={flash ? 'text-group flash' : 'text-group'} {...cameraFocus(side)}>
       <legend>{title}</legend>
-      <input
+      <TextInput
         ref={inputRef}
         id={id}
-        type="text"
         lang="ja"
         aria-label={`${title} text`}
         placeholder={side === 'l' ? '空手道' : 'カラテ'}
         value={t.text}
-        onChange={(e) => set({ text: e.target.value })}
+        onChange={(text) => set({ text })}
       />
       {t.text.trim() && (
         <>

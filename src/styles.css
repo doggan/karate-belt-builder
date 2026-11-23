@@ -382,6 +382,36 @@ input[type='text'] {
   color: var(--text);
 }
 
+.text-input {
+  position: relative;
+}
+
+.text-input input {
+  padding-right: 36px;
+}
+
+.text-clear {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.text-clear:hover {
+  background: var(--border);
+  color: var(--text);
+}
+
 input[type='range'] {
   width: 100%;
   accent-color: var(--accent);
