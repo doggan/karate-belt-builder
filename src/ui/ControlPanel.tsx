@@ -54,7 +54,10 @@ export function ControlPanel() {
     <aside className="panel" aria-label="Belt options">
       <header className="panel-header">
         <h1>Belt Builder</h1>
-        <p className="muted">Drag to rotate · scroll or pinch to zoom · right-drag, shift-drag or two fingers to pan · click any part to edit it</p>
+        <p className="muted">
+          <span className="hint-mouse">Drag to rotate · scroll to zoom · right-drag or shift-drag to pan · click any part to edit it</span>
+          <span className="hint-touch">Drag to rotate · pinch to zoom · two fingers to pan · tap any part to edit it</span>
+        </p>
       </header>
 
       <Section

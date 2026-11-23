@@ -32,7 +32,8 @@ body {
 
 .app {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  /* minmax(0, …): never let wide content (e.g. the action bar) stretch the layout past the screen. */
+  grid-template-columns: minmax(0, 1fr) 320px;
   height: 100dvh;
 }
 
@@ -57,6 +58,7 @@ body {
 }
 
 .panel {
+  min-width: 0;
   background: var(--panel);
   border-left: 1px solid var(--border);
   padding: 20px;
@@ -445,27 +447,64 @@ summary:focus-visible {
 }
 
 /* Mobile: scene on top, options as a scrolling bottom sheet. */
+/* Instructions: mouse wording by default, touch wording on touch screens. */
+.hint-touch {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .hint-mouse {
+    display: none;
+  }
+
+  .hint-touch {
+    display: inline;
+  }
+}
+
 @media (max-width: 768px) {
   .app {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr minmax(0, 45dvh);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 48dvh);
   }
 
   .panel {
     border-left: 0;
     border-top: 1px solid var(--border);
-    padding: 16px;
-    gap: 14px;
+    padding: 14px 16px 16px;
+    gap: 12px;
   }
 
+  .panel-header h1 {
+    font-size: 17px;
+  }
+
+  /* Bottom bar: [Copy share link][Download PNG][Reset] on one row, the credit under it. */
   .actions {
     bottom: -16px;
-    padding: 8px 0 4px;
+    padding: 10px 0 calc(4px + env(safe-area-inset-bottom));
     flex-direction: row;
+    flex-wrap: wrap;
   }
 
-  .actions > button {
+  .actions > button.primary {
+    flex: 1 1 140px;
+  }
+
+  .actions-row {
     flex: 1 1 auto;
+  }
+
+  .actions button {
+    padding: 10px 12px;
+    white-space: nowrap;
+  }
+
+  .credit {
+    flex-basis: 100%;
+    flex-direction: row;
+    justify-content: center;
+    margin: 0;
   }
 }
 
