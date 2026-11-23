@@ -75,11 +75,14 @@ const BAND_REACH = 0.69
 /** A point the flap's center line passes through under the band: the middle of the band. */
 const FLAP_THROUGH = { x: 0.5, y: -0.2 }
 /** Where the right tail starts. (The left one starts where the band strand's hidden run leads.) */
-const ROOT_X_RIGHT = 1.2
-/** Height at which both tails start, just below the knot. */
-const ROOT_Y = -0.9
+const ROOT_X_RIGHT = 0.78
+/**
+ * Height at which both tails start: still just under the knot's edge, so the turn from
+ * lying flat in the knot to heading out of it is hidden and only the tail's arc shows.
+ */
+const ROOT_Y = -0.35
 /** How far forward each tail starts, in belt thicknesses. */
-const ROOT_Z = { l: 1.4, r: 2.5 }
+const ROOT_Z = { l: 1.1, r: 3.3 }
 /** Samples along the free run from the knot to each tail root. */
 const EXIT_STEPS = 20
 
@@ -200,12 +203,16 @@ function flapStrand(w: number, t: number, bend: Bend): KnotStrand {
   // seen from the front) passes under the middle of the band.
   const offTopY = 0.495 * w + path.frames[offTop].p.y - path.frames[backTop].p.y
   path.anchor(offTop, new THREE.Vector3(FLAP_THROUGH.x * w - (offTopY - FLAP_THROUGH.y * w) / Math.tan(FLAP), offTopY, frontZ))
-  // On under the band, stopping while still out of sight; from there it curves down to the root.
-  path.flat((path.position.y - (FLAP_THROUGH.y - 0.3) * w) / Math.sin(FLAP), 0)
+  // From here, still out of sight under the band, it curves out toward the tail root.
 
   // It stays bunched all the way out of the knot; the tail then spreads back to full
-  // width gradually as it hangs (see `tailFrames`), so there is no visible step.
-  taper(path.frames, 0, path.mark, FLAP_WIDTH, FLAP_WIDTH)
+  // width gradually as it hangs (see `tailFrames`), so there is no visible step. Under
+  // the band, where it turns out toward the tail, it is squeezed a little tighter still.
+  const frames = path.frames
+  const dist = arcLengths(frames)
+  const squeezeFrom = dist.findIndex((d) => d >= dist[path.mark] - 0.3 * w)
+  taper(frames, 0, squeezeFrom, FLAP_WIDTH, FLAP_WIDTH)
+  taper(frames, squeezeFrom, path.mark, FLAP_WIDTH, HIDDEN_WIDTH)
   return finish(path, bend, 1, new THREE.Vector3(ROOT_X_RIGHT * w, ROOT_Y * w, ROOT_Z.r * t), FLAP_WIDTH)
 }
 
@@ -238,7 +245,7 @@ function bandStrand(w: number, t: number, bend: Bend): KnotStrand {
   path.flat(top / rise)
   path.fold(X, -1, overFront.radius, overFront.angle)
   path.anchor(backTop, new THREE.Vector3(0, 0.495 * w, BEHIND * t))
-  path.flat((2.85 * t) / rise)
+  path.flat((6.5 * t) / rise) // far enough out that the tails can start their arc underneath it
   path.fold(X, -1, belly.radius, belly.angle)
   const front = path.mark
   // The roll's size and the run down to it follow from where the band must end up: as
@@ -259,10 +266,9 @@ function bandStrand(w: number, t: number, bend: Bend): KnotStrand {
   path.flat(0.36 * w, path.shearFor(path.axisTo(tailward)))
   path.fold(path.axisTo(tailward), 1, ((LAYER.back - LAYER.underFlap) * t) / 2)
   const turned = path.mark
-  // Back to full width before it shows; the rows straighten over the whole run.
-  path.flat(0.12 * w, path.slant * (0.33 / 0.45))
+  // Back to full width before it shows.
+  path.flat(0.12 * w, path.slant * 0.75)
   const widened = path.mark
-  path.flat(0.33 * w, 0)
 
   taper(path.frames, 0, rolled, BAND_WIDTH, BAND_WIDTH)
   taper(path.frames, rolled, bunched, BAND_WIDTH, HIDDEN_WIDTH)

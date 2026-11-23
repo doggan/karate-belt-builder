@@ -132,10 +132,11 @@ export class StrandPath {
 
   /**
    * Finish with a smooth run from the current end to `target` (position and frame),
-   * for the stretch where the strap leaves the knot and is free to curve.
+   * for the stretch where the strap leaves the knot and is free to curve. Any slant
+   * left in the cross-rows straightens out along the way.
    */
   connect(target: Frame, steps: number): this {
-    if (Math.abs(this.shear) > 1e-6) throw new Error('StrandPath.connect: finish the last flat with shear 0')
+    const shear0 = this.shear
     const p0 = this.p.clone()
     const d0 = this.dir.clone()
     const a0 = this.across.clone()
@@ -167,6 +168,11 @@ export class StrandPath {
       this.out.crossVectors(this.dir, this.across).normalize()
       this.push()
     }
+    // Straighten the rows evenly by distance (the samples are not evenly spaced).
+    const first = this.frames.length - steps - 1
+    const dist = arcLengths(this.frames.slice(first))
+    for (let i = 0; i <= steps; i++) this.frames[first + i].shear = shear0 * (1 - dist[i] / dist[steps])
+    this.shear = 0
     // Land exactly on the target so whatever continues from it shares this frame.
     const last = this.frames[this.frames.length - 1]
     last.p.copy(target.p)
