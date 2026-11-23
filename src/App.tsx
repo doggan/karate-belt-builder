@@ -3,13 +3,16 @@ import { VIEW_BUTTONS } from './scene/cameraViews'
 import { Scene } from './scene/Scene'
 import { ControlPanel } from './ui/ControlPanel'
 import { LoadingOverlay } from './ui/LoadingOverlay'
+import { SceneErrorBoundary } from './ui/SceneErrorBoundary'
 import { ViewActions } from './ui/ViewActions'
 
 export default function App() {
   return (
     <div className="app">
       <main className="viewport">
-        <Scene />
+        <SceneErrorBoundary>
+          <Scene />
+        </SceneErrorBoundary>
         <LoadingOverlay />
         <nav className="view-bar" aria-label="Camera views">
           <span className="view-bar-icon" title="Camera views" aria-hidden="true">

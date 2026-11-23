@@ -593,6 +593,51 @@ summary:focus-visible {
   }
 }
 
+/* Shown in place of the 3D view if it fails (above the loading overlay, which never clears then). */
+.scene-error {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 24px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.scene-error p {
+  max-width: 420px;
+  margin: 0;
+}
+
+.scene-error-title {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.scene-error-detail {
+  font-size: 12px;
+  font-family: ui-monospace, monospace;
+  word-break: break-word;
+}
+
+.scene-error button {
+  margin-top: 6px;
+  padding: 7px 16px;
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
 /* ── Loading ─────────────────────────────────────────────────────────────── */
 
 .loading-overlay {
