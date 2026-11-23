@@ -24,7 +24,9 @@ export function LoadingOverlay() {
       <div className="loading-card">
         <span>{ready ? 'Ready' : 'Loading…'}</span>
         <div className="loading-bar" aria-hidden="true">
-          <div className="loading-fill" style={{ width: `${Math.max(pct, 4)}%` }} />
+          {/* Scaled, not resized: a transform animates off the main thread, so the bar keeps up
+              with the number even while loading blocks it (a width transition stalls). */}
+          <div className="loading-fill" style={{ transform: `scaleX(${Math.max(pct, 4) / 100})` }} />
         </div>
         <span className="loading-pct">{pct}%</span>
       </div>

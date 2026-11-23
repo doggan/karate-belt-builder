@@ -562,7 +562,8 @@ summary:focus-visible {
 .loading-fill {
   height: 100%;
   background: var(--accent);
-  transition: width 200ms ease;
+  transform-origin: left center;
+  transition: transform 200ms ease;
 }
 
 .loading-pct {
