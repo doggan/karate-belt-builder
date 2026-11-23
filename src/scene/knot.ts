@@ -48,7 +48,7 @@ const deg = THREE.MathUtils.degToRad
 const X = new THREE.Vector3(1, 0, 0)
 
 /** The flap's heading as seen from the front, below horizontal. */
-const FLAP = deg(46)
+const FLAP = deg(40)
 /** How far the band leans from upright (its lower end toward the flap's side). */
 const BAND_LEAN = deg(10)
 
@@ -60,26 +60,28 @@ const BEHIND = -2.65
 
 // Cloth bunches where the knot grips it. Widths are fractions of the belt's width.
 const BAND_WIDTH = 0.8
-/** The flap, where it rounds the wraps' top edge, and where it has passed under the band. */
-const FLAP_WIDTH = { top: 0.72, under: 0.66 }
+/** The flap strand, from where it rounds the wraps' top edge to where its tail starts. */
+const FLAP_WIDTH = 0.72
 /** Runs hidden inside the knot, squeezed so they stay out of sight. */
 const HIDDEN_WIDTH = 0.5
-/** The right tail leaves through the band's loop, so it starts a little bunched. */
-const ROOT_WIDTH_RIGHT = 0.85
 
 // Placement, in belt widths from the middle of the belt's front. The knot is centered on
 // the belt: the band reaches as far above the wrap's center line as below it, and the
-// tails leave the knot the same distance either side of the middle.
+// tails leave the knot at the same height, one either side of it.
 /** Center line of the band (the flap fills the space to its left). */
-const BAND_X = 0.2
+const BAND_X = 0.35
 /** How far the band reaches below the wrap's center line (as far as it reaches above). */
 const BAND_REACH = 0.69
+/** A point the flap's center line passes through under the band: the middle of the band. */
+const FLAP_THROUGH = { x: 0.5, y: -0.2 }
+/** Where the right tail starts. (The left one starts where the band strand's hidden run leads.) */
+const ROOT_X_RIGHT = 1.2
 /** Height at which both tails start, just below the knot. */
 const ROOT_Y = -0.9
 /** How far forward each tail starts, in belt thicknesses. */
 const ROOT_Z = { l: 1.4, r: 2.5 }
 /** Samples along the free run from the knot to each tail root. */
-const EXIT_STEPS = 14
+const EXIT_STEPS = 20
 
 /**
  * Maps knot space onto the waist: x becomes distance around the wrap's center line
@@ -169,7 +171,7 @@ function finish(path: StrandPath, bend: Bend, side: 1 | -1, rootKnot: THREE.Vect
 }
 
 /** The flap strand: up behind the wraps, over their top edge, down across the front, out to the right tail. */
-function flapStrand(w: number, t: number, bend: Bend, rootX: number): KnotStrand {
+function flapStrand(w: number, t: number, bend: Bend): KnotStrand {
   // Seen from the side the strap goes up the back of the wraps, rounds their top edge in
   // two bends with a short run between, and comes down the front leaning forward as it
   // climbs onto the layers beneath the band. All these folds are about the wrap's own
@@ -195,15 +197,16 @@ function flapStrand(w: number, t: number, bend: Bend, rootX: number): KnotStrand
   path.fold(X, -1, settle.radius, settle.angle)
 
   // Place it: the bends hug the wraps' top edge, and the center line (a straight diagonal
-  // seen from the front) is aimed at the tail root.
+  // seen from the front) passes under the middle of the band.
   const offTopY = 0.495 * w + path.frames[offTop].p.y - path.frames[backTop].p.y
-  path.anchor(offTop, new THREE.Vector3(rootX - (offTopY - ROOT_Y * w) / Math.tan(FLAP), offTopY, frontZ))
-  // On under the band, to about half a belt width short of the root.
-  path.flat((path.position.y - (ROOT_Y + 0.4) * w) / Math.sin(FLAP), 0)
+  path.anchor(offTop, new THREE.Vector3(FLAP_THROUGH.x * w - (offTopY - FLAP_THROUGH.y * w) / Math.tan(FLAP), offTopY, frontZ))
+  // On under the band, stopping while still out of sight; from there it curves down to the root.
+  path.flat((path.position.y - (FLAP_THROUGH.y - 0.3) * w) / Math.sin(FLAP), 0)
 
-  taper(path.frames, 0, offTop, FLAP_WIDTH.top, FLAP_WIDTH.top)
-  taper(path.frames, offTop, path.mark, FLAP_WIDTH.top, FLAP_WIDTH.under)
-  return finish(path, bend, 1, new THREE.Vector3(rootX, ROOT_Y * w, ROOT_Z.r * t), ROOT_WIDTH_RIGHT)
+  // It stays bunched all the way out of the knot; the tail then spreads back to full
+  // width gradually as it hangs (see `tailFrames`), so there is no visible step.
+  taper(path.frames, 0, path.mark, FLAP_WIDTH, FLAP_WIDTH)
+  return finish(path, bend, 1, new THREE.Vector3(ROOT_X_RIGHT * w, ROOT_Y * w, ROOT_Z.r * t), FLAP_WIDTH)
 }
 
 /** The band strand: up behind the wraps, over their top edge, down around the flap, under the bottom roll, out to the left tail. */
@@ -276,8 +279,5 @@ function bandStrand(w: number, t: number, bend: Bend): KnotStrand {
 /** Both strands of the knot for a belt whose outer wrap follows `wrap`. */
 export function buildKnot(wrap: Ellipse, width: number, thickness: number): Knot {
   const bend = waistBend(wrap, thickness)
-  const l = bandStrand(width, thickness, bend)
-  // The right tail starts as far right of the middle as the left one starts left of it.
-  const r = flapStrand(width, thickness, bend, -l.frames[l.frames.length - 1].p.x)
-  return { l, r }
+  return { l: bandStrand(width, thickness, bend), r: flapStrand(width, thickness, bend) }
 }

@@ -104,7 +104,7 @@ export class StrandPath {
     const around = a.dot(this.across) // how fast it goes around it
     this.shear = along / around
     const length = (angle * radius) / around
-    const steps = Math.max(2, Math.ceil(angle / FOLD_STEP))
+    const steps = Math.max(2, Math.ceil(angle / FOLD_STEP), Math.ceil(length / FLAT_STEP))
     const center = this.p.clone().addScaledVector(this.out, side * radius)
     const arm = this.p.clone().sub(center)
     const start = { dir: this.dir.clone(), across: this.across.clone(), out: this.out.clone() }

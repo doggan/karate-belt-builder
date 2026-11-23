@@ -11,7 +11,7 @@ const SPLAY_RELAX = 0.12
 /** Forward lean, so the tails clear the jacket. */
 const LEAN = deg(3.5)
 /** A tail that leaves the knot bunched (see `Frame.width`) is back to full width this far down (m). */
-const WIDEN = 0.06
+const WIDEN = 0.16
 
 const FORWARD = new THREE.Vector3(0, 0, 1)
 
