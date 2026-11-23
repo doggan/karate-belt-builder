@@ -25,7 +25,14 @@ export const useBeltStore = create<BeltStore>((set) => ({
 export function syncConfigToUrl(): () => void {
   return useBeltStore.subscribe((state, prev) => {
     if (state.config === prev.config) return
-    const url = `${window.location.pathname}?${encodeConfig(state.config)}${window.location.hash}`
-    window.history.replaceState(null, '', url)
+    // Relative to the current address ("?…"), so whatever path the page was opened at is
+    // kept as is. (Prefixing the pathname breaks on a path like "//", which would read as
+    // another host and make the browser refuse the change.) Never let this get in the way
+    // of editing: a failed sync just leaves the old address.
+    try {
+      window.history.replaceState(null, '', `?${encodeConfig(state.config)}${window.location.hash}`)
+    } catch (err) {
+      console.warn('Could not update the share link in the address bar', err)
+    }
   })
 }

@@ -9,7 +9,8 @@ import { loadGlyphs, useFontsVersion } from './fonts'
 import { hoverCursor, noRaycast, pick } from './picking'
 
 /** Prepared by scripts/prepare-model.mjs: faces +Z, meters, belt line at WAIST_Y, baked belt removed. */
-const MODEL_URL = '/models/dogi.glb'
+// Under the app's base path, which is not the site root when hosted on a sub-path (GitHub Pages).
+const MODEL_URL = `${import.meta.env.BASE_URL}models/dogi.glb`
 /** How far above/below the belt the waist reshaping fades out (m); shoulders and hems stay natural. */
 const RESHAPE_FALLOFF = 0.32
 /**
