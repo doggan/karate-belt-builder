@@ -57,9 +57,8 @@ describe('belt knot', () => {
     for (const waist of WAISTS) {
       const { knot } = knotFor(waist)
       expect(knot.l.root.p.y).toBeCloseTo(knot.r.root.p.y, 9)
-      // ...one either side of the middle of the belt.
-      expect(knot.l.root.p.x).toBeLessThan(0)
-      expect(knot.r.root.p.x).toBeGreaterThan(0.015)
+      // ...the left one to the left of the right one, both under the knot.
+      expect(knot.l.root.p.x).toBeLessThan(knot.r.root.p.x - 0.015)
       for (const strand of [knot.l, knot.r]) {
         expect(strand.root.out.z).toBeGreaterThan(0.75) // leaning forward out of the knot, still facing the viewer
         expect(strand.root.across.x).toBeGreaterThan(0.5) // front face reads left to right

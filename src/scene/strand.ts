@@ -48,6 +48,11 @@ export class StrandPath {
     return this.dir.clone()
   }
 
+  /** The direction straight across the strap. */
+  get sideways(): THREE.Vector3 {
+    return this.across.clone()
+  }
+
   /** Current slant of the cross-rows (see `Frame.shear`). */
   get slant(): number {
     return this.shear
@@ -117,6 +122,27 @@ export class StrandPath {
       this.dir.copy(start.dir).applyQuaternion(q)
       this.across.copy(start.across).applyQuaternion(q)
       this.out.copy(start.out).applyQuaternion(q)
+      this.push()
+    }
+    return this
+  }
+
+  /**
+   * A stretch that curves sideways within the strap's own plane, turning toward
+   * `across` by `angle`. Cloth can't really do this (it would have to stretch along one
+   * edge), so it is only for bunched runs hidden inside the knot. `shear` as for `flat`.
+   */
+  swerve(length: number, angle: number, shear = this.shear): this {
+    const steps = Math.max(2, Math.ceil(Math.abs(angle) / FOLD_STEP), Math.ceil(length / FLAT_STEP))
+    const q = new THREE.Quaternion().setFromAxisAngle(this.out, -angle / steps)
+    const half = new THREE.Quaternion().setFromAxisAngle(this.out, -angle / steps / 2)
+    const chord = new THREE.Vector3()
+    const from = this.shear
+    for (let i = 1; i <= steps; i++) {
+      this.p.addScaledVector(chord.copy(this.dir).applyQuaternion(half), length / steps)
+      this.dir.applyQuaternion(q)
+      this.across.applyQuaternion(q)
+      this.shear = from + ((shear - from) * i) / steps
       this.push()
     }
     return this
