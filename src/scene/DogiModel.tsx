@@ -23,7 +23,7 @@ const CHEST_X = 0.115
 const HEM_CHAR_SIZE = 0.024
 const HEM_ABOVE_SEAM = 0.025
 const HEM_PROBE_X = 0.12
-const HEM_EDGE_INSET = 0.035
+const HEM_EDGE_INSET = 0.008
 /** The column sits on the viewer's left of the closing edge, toward that side's outer edge (-1 = -x). */
 const HEM_SIDE = -1
 /**
