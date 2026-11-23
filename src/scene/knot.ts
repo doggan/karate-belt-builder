@@ -48,7 +48,7 @@ const deg = THREE.MathUtils.degToRad
 const X = new THREE.Vector3(1, 0, 0)
 
 /** The flap's heading as seen from the front, below horizontal. */
-const FLAP = deg(40)
+const FLAP = deg(45)
 /** How far the band leans from upright (its lower end toward the flap's side). */
 const BAND_LEAN = deg(10)
 
@@ -69,13 +69,13 @@ const HIDDEN_WIDTH = 0.5
 // the belt: the band reaches as far above the wrap's center line as below it, and the
 // tails leave the knot at the same height, one either side of it.
 /** Center line of the band (the flap fills the space to its left). */
-const BAND_X = 0.35
+const BAND_X = 0.42
 /** How far the band reaches below the wrap's center line (as far as it reaches above). */
 const BAND_REACH = 0.69
 /** A point the flap's center line passes through under the band: the middle of the band. */
-const FLAP_THROUGH = { x: 0.5, y: -0.2 }
+const FLAP_THROUGH = { x: 0.57, y: -0.1 }
 /** Where the right tail starts. (The left one starts where the band strand's hidden run leads.) */
-const ROOT_X_RIGHT = 0.78
+const ROOT_X_RIGHT = 0.82
 /**
  * Height at which both tails start: still just under the knot's edge, so the turn from
  * lying flat in the knot to heading out of it is hidden and only the tail's arc shows.
