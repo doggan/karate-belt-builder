@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import type { FocusTarget } from '../uiStore'
-import { WAIST_Y } from './beltLayout'
+import { BELT_FRONT_DROP, WAIST_Y } from './beltLayout'
 
 /** Where the camera sits and what it looks at. */
 export interface CameraPose {
@@ -19,7 +19,7 @@ export const VIEW_POSES = {
   front: pose([0, 1.1, 2.55], [0, WAIST_Y, 0]),
   side: pose([2.55, 1.1, 0], [0, WAIST_Y, 0]),
   back: pose([0, 1.1, -2.55], [0, WAIST_Y, 0]),
-  knot: pose([0.18, WAIST_Y + 0.06, 0.95], [0, WAIST_Y - 0.06, 0.15]),
+  knot: pose([0.18, WAIST_Y + 0.06 - BELT_FRONT_DROP, 0.95], [0, WAIST_Y - 0.06 - BELT_FRONT_DROP, 0.15]),
 } satisfies Record<string, CameraPose>
 
 export type ViewId = Exclude<keyof typeof VIEW_POSES, 'start'>
@@ -34,7 +34,7 @@ export const VIEW_BUTTONS: ReadonlyArray<{ id: ViewId; label: string }> = [
 /** Close-ups for the part being edited in the panel. */
 const TAIL_X = 0.07
 const tailPose = (side: -1 | 1) =>
-  pose([side * 0.2, WAIST_Y - 0.04, 0.95], [side * TAIL_X, WAIST_Y - 0.14, 0.17])
+  pose([side * 0.2, WAIST_Y - 0.04 - BELT_FRONT_DROP, 0.95], [side * TAIL_X, WAIST_Y - 0.14 - BELT_FRONT_DROP, 0.17])
 
 const FOCUS_POSES: Record<Exclude<FocusTarget, 'label'>, CameraPose> = {
   l: tailPose(-1),

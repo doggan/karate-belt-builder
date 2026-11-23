@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { REFERENCE_BELT } from '../config/reference'
 import { DEFAULT_CONFIG } from '../config/schema'
-import { bodyEllipseForCircumference, computeBeltLayout, ellipseCircumference, MODEL_WAIST } from './beltLayout'
+import { BELT_FRONT_DROP, beltDropAt, bodyEllipseForCircumference, computeBeltLayout, ellipseCircumference, MODEL_WAIST } from './beltLayout'
 
 describe('belt layout', () => {
   it('builds a body ellipse with the requested circumference', () => {
@@ -38,6 +38,22 @@ describe('belt layout', () => {
       const { body } = computeBeltLayout({ ...DEFAULT_CONFIG, waist })
       expect(body.b / body.a).toBeCloseTo(modelRatio, 6)
       expect(ellipseCircumference(body)).toBeCloseTo(waist / 100, 6)
+    }
+  })
+
+  it('runs level across the back and sides and dips in a U to the knot at the front', () => {
+    const a = computeBeltLayout(DEFAULT_CONFIG).outerWrap.a
+    for (const angle of [Math.PI / 2, 2, Math.PI, -2, -Math.PI / 2, 4, 1.5 * Math.PI]) expect(beltDropAt(angle, a)).toBeCloseTo(0, 9)
+    expect(beltDropAt(0, a)).toBeCloseTo(BELT_FRONT_DROP, 9)
+    // Symmetric, and deepening steadily from each side to the front.
+    let prev = 0
+    for (let angle = Math.PI / 2; angle >= 0; angle -= 0.01) {
+      const drop = beltDropAt(angle, a)
+      expect(drop).toBeCloseTo(beltDropAt(-angle, a), 12)
+      // ...however the angle is written (the wraps run it from 0 to 2π).
+      expect(drop).toBeCloseTo(beltDropAt(2 * Math.PI - angle, a), 12)
+      expect(drop).toBeGreaterThanOrEqual(prev)
+      prev = drop
     }
   })
 })

@@ -3,13 +3,12 @@ import * as THREE from 'three'
 import { useFrame, type ThreeEvent } from '@react-three/fiber'
 import { BRAND_LABEL, EMBROIDERY_FONT, beltColor, tailIndex, type BeltConfig, type TailSide } from '../config/schema'
 import { useUiStore } from '../uiStore'
-import type { BeltLayout } from './beltLayout'
-import { WAIST_Y } from './beltLayout'
+import { WAIST_Y, type BeltLayout } from './beltLayout'
 import { drawTailArt, LABEL_END_MARGIN, LABEL_LENGTH } from './embroidery'
 import { loadGlyphs, useFontsVersion } from './fonts'
 import { buildKnot } from './knot'
 import { hoverCursor, noRaycast, pick, pickSection } from './picking'
-import { buildFaceStrip, buildRibbon, ellipseFrames, updateFaceStrip, updateRibbon, type RibbonOptions } from './ribbon'
+import { buildFaceStrip, buildRibbon, updateFaceStrip, updateRibbon, wrapFrames, type RibbonOptions } from './ribbon'
 import { createStitchTextures, STITCH_ROWS } from './stitching'
 import { TailSim } from './tailPhysics'
 import { tailFrames } from './tailShape'
@@ -68,9 +67,9 @@ export function Belt({ layout, config }: BeltProps) {
     // u = 0 where the tail starts, so the stitching runs unbroken from knot to tail.
     const strand = (s: typeof knot.l) => buildRibbon(s.frames, { ...strip.tail, warp: s.warp, uStart: -s.length })
     return {
-      inner: buildRibbon(ellipseFrames(innerWrap.a, innerWrap.b, WAIST_Y, WRAP_SEGMENTS), { ...strip.belt, closed: true }),
+      inner: buildRibbon(wrapFrames(innerWrap.a, innerWrap.b, WAIST_Y, WRAP_SEGMENTS), { ...strip.belt, closed: true }),
       // The second wrap sits a hair lower, like a real double-wrapped belt.
-      outer: buildRibbon(ellipseFrames(outerWrap.a, outerWrap.b, WAIST_Y - 0.0015, WRAP_SEGMENTS), { ...strip.belt, closed: true }),
+      outer: buildRibbon(wrapFrames(outerWrap.a, outerWrap.b, WAIST_Y - 0.0015, WRAP_SEGMENTS), { ...strip.belt, closed: true }),
       lKnot: strand(knot.l),
       rKnot: strand(knot.r),
       l: buildRibbon(rest.l, strip.tail),

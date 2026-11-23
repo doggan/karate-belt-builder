@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_CONFIG } from '../config/schema'
-import { computeBeltLayout, WAIST_Y } from './beltLayout'
+import { BELT_FRONT_DROP, computeBeltLayout, WAIST_Y } from './beltLayout'
 import { buildKnot, type KnotStrand } from './knot'
 import { buildRibbon } from './ribbon'
 import { tailFrames } from './tailShape'
@@ -112,7 +112,7 @@ describe('belt knot', () => {
     // Four layers of belt at its thickest.
     expect(box.max.z - front).toBeGreaterThan(3.5 * layout.thickness)
     // As far above the belt's center line as below it, give or take a few millimeters.
-    const beltY = WAIST_Y - 0.0015
+    const beltY = WAIST_Y - 0.0015 - BELT_FRONT_DROP // the bottom of the belt's U, at the front
     expect(Math.abs((box.max.y + box.min.y) / 2 - beltY)).toBeLessThan(0.1 * layout.width)
     expect(box.max.y - box.min.y).toBeLessThan(1.7 * layout.width)
   })

@@ -3,7 +3,7 @@ import * as THREE from 'three'
 import { Decal, useGLTF } from '@react-three/drei'
 import { BRAND_LABEL, BLACK_THREAD_HEX, EMBROIDERY_FONT, type BeltConfig } from '../config/schema'
 import { useUiStore } from '../uiStore'
-import { WAIST_Y, type BeltLayout } from './beltLayout'
+import { beltDropAt, WAIST_Y, type BeltLayout, type Ellipse } from './beltLayout'
 import { drawChestArt, drawHemArt } from './embroidery'
 import { loadGlyphs, useFontsVersion } from './fonts'
 import { hoverCursor, noRaycast, pick } from './picking'
@@ -12,6 +12,14 @@ import { hoverCursor, noRaycast, pick } from './picking'
 const MODEL_URL = '/models/dogi.glb'
 /** How far above/below the belt the waist reshaping fades out (m); shoulders and hems stay natural. */
 const RESHAPE_FALLOFF = 0.32
+/**
+ * The belt cinches the jacket in: within this distance of the belt's center line (m) the
+ * jacket is drawn in to the belt's body ellipse, fading out over CINCH_FADE beyond it.
+ * Jacket within CINCH_FREE of that ellipse (as a fraction of its size) is left alone.
+ */
+const CINCH_HALF = 0.035
+const CINCH_FADE = 0.05
+const CINCH_FREE = 0.97
 /** Where the chest kanji column starts, and its offset from center (m). */
 const CHEST_TOP_Y = WAIST_Y + 0.38
 const CHEST_X = 0.115
@@ -54,7 +62,8 @@ export function DogiModel({ layout, config }: DogiModelProps) {
   }, [gltf])
 
   const { x: sx, z: sz } = layout.modelScale
-  const geometry = useMemo(() => reshapeWaist(base, sx, sz), [base, sx, sz])
+  const { a: bodyA, b: bodyB } = layout.body
+  const geometry = useMemo(() => reshapeWaist(base, sx, sz, { a: bodyA, b: bodyB }), [base, sx, sz, bodyA, bodyB])
   useEffect(() => () => geometry.dispose(), [geometry])
   // The hem and the closing edge are found once on the unreshaped model (each takes ~100
   // raycasts against the full mesh, far too slow to redo while the waist slider drags), then
@@ -131,7 +140,7 @@ function waistScaleAt(y: number, s: number): number {
   return 1 + (s - 1) * Math.exp(-d * d)
 }
 
-function reshapeWaist(base: THREE.BufferGeometry, sx: number, sz: number): THREE.BufferGeometry {
+function reshapeWaist(base: THREE.BufferGeometry, sx: number, sz: number, body: Ellipse): THREE.BufferGeometry {
   const g = base.clone()
   const pos = g.getAttribute('position') as THREE.BufferAttribute
   const nrm = g.getAttribute('normal') as THREE.BufferAttribute | undefined
@@ -143,6 +152,7 @@ function reshapeWaist(base: THREE.BufferGeometry, sx: number, sz: number): THREE
     const kz = waistScaleAt(p[j + 1], sz)
     p[j] *= kx
     p[j + 2] *= kz
+    cinch(p, j, body)
     if (n) {
       // Normals transform by the inverse scale (ignoring the falloff's gradient — a small error).
       const nx = n[j] / kx
@@ -159,6 +169,30 @@ function reshapeWaist(base: THREE.BufferGeometry, sx: number, sz: number): THREE
   g.computeBoundingSphere()
   g.computeBoundingBox()
   return g
+}
+
+/**
+ * Draw the jacket in under the belt. Around the waist the belt runs at its own height
+ * (level at the back and sides, dipping to the knot: `beltDropAt`). Fabric bulging past the
+ * body ellipse there is squeezed smoothly onto it (never past it, keeping the gi's outer and
+ * inner surfaces in order); the squeeze fades out above and below the belt. Arms hanging by
+ * the sides are far outside the ellipse and are left alone.
+ */
+function cinch(p: Float32Array, j: number, { a, b }: Ellipse) {
+  const x = p[j]
+  const z = p[j + 2]
+  const r = Math.hypot(x / a, z / b)
+  if (r <= CINCH_FREE || r > 1.6) return
+  const h = p[j + 1] - (WAIST_Y - beltDropAt(Math.atan2(x / a, z / b), a)) // height above the belt's center line
+  const along = 1 - THREE.MathUtils.smoothstep(Math.abs(h), CINCH_HALF, CINCH_HALF + CINCH_FADE)
+  const nearBody = 1 - THREE.MathUtils.smoothstep(r, 1.3, 1.6)
+  const w = along * nearBody
+  if (w <= 0) return
+  const room = 1 - CINCH_FREE
+  const squeezed = CINCH_FREE + room * Math.tanh((r - CINCH_FREE) / room)
+  const k = 1 + w * (squeezed / r - 1)
+  p[j] = x * k
+  p[j + 2] = z * k
 }
 
 /** First hit on the jacket surface from a ray shot from the front (−Z) at (x, y). */

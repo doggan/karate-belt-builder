@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { beltDropAt } from './beltLayout'
 
 /**
  * One cross-section sample along a belt strip.
@@ -282,15 +283,24 @@ export function updateFaceStrip(geometry: THREE.BufferGeometry, frames: Frame[],
   geometry.computeBoundingSphere()
 }
 
-/** Frames around a horizontal ellipse at height y; θ = 0 is the front (+Z). */
-export function ellipseFrames(a: number, b: number, y: number, segments: number): Frame[] {
+/**
+ * Frames around a wrap of the belt: an ellipse seen from above (θ = 0 is the front, +Z),
+ * at height y at the back and sides and dipping toward the front (`beltDropAt`). The
+ * belt's width stays square to its run, so where it slopes it leans with it.
+ */
+export function wrapFrames(a: number, b: number, y: number, segments: number): Frame[] {
   const frames: Frame[] = []
+  const heading = new THREE.Vector3()
+  const dt = 1e-4
   for (let i = 0; i < segments; i++) {
     const t = (i / segments) * Math.PI * 2
+    const slope = (beltDropAt(t + dt, a) - beltDropAt(t - dt, a)) / (2 * dt)
+    const out = new THREE.Vector3(b * Math.sin(t), 0, a * Math.cos(t)).normalize()
+    heading.set(a * Math.cos(t), -slope, -b * Math.sin(t)).normalize()
     frames.push({
-      p: new THREE.Vector3(a * Math.sin(t), y, b * Math.cos(t)),
-      across: new THREE.Vector3(0, 1, 0),
-      out: new THREE.Vector3(b * Math.sin(t), 0, a * Math.cos(t)).normalize(),
+      p: new THREE.Vector3(a * Math.sin(t), y - beltDropAt(t, a), b * Math.cos(t)),
+      across: new THREE.Vector3().crossVectors(out, heading).normalize(),
+      out,
     })
   }
   return frames

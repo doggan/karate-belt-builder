@@ -1,9 +1,31 @@
+import * as THREE from 'three'
 import { REFERENCE_BELT } from '../config/reference'
 import { BELT_WIDTH_CM, beltSize, type BeltConfig } from '../config/schema'
 import dogi from './dogiModel.json'
 
 /** Height of the belt center line above the floor (m). Matches the prepared dogi model. */
 export const WAIST_Y = dogi.waistY
+/**
+ * A tied belt isn't level all the way round: it runs level across the back and over the
+ * hips at the sides (at WAIST_Y), then dips in a shallow U toward the front, where the knot
+ * sits at the bottom of the U, this far below the sides (m).
+ */
+export const BELT_FRONT_DROP = 0.04
+/** Half the width of the U's flat bottom, around the knot (m): the knot sits level, not bent. */
+const BELT_FLAT_HALF = 0.06
+
+/**
+ * How far below WAIST_Y the belt's center line runs at `angle` around the waist (the
+ * ellipse parameter: 0 = front, ±π/2 = the sides) on a wrap `wrapHalfWidth` wide. Level
+ * across the front under the knot, easing smoothly down from each side.
+ */
+export function beltDropAt(angle: number, wrapHalfWidth: number): number {
+  const flat = Math.asin(Math.min(1, BELT_FLAT_HALF / wrapHalfWidth))
+  const fromFront = Math.abs(Math.atan2(Math.sin(angle), Math.cos(angle))) // any angle → 0…π
+  const u = (fromFront - flat) / (Math.PI / 2 - flat)
+  return BELT_FRONT_DROP * (1 - THREE.MathUtils.smoothstep(u, 0, 1))
+}
+
 /** Belt thickness (m). */
 export const BELT_THICKNESS = 0.004
 /** Never let tails vanish completely, even for an undersized belt. */
@@ -25,6 +47,7 @@ export interface BeltLayout {
   body: Ellipse
   /** Horizontal scale to apply to the dogi model at the waist so it matches `body`. */
   modelScale: { x: number; z: number }
+  /** The wraps' center lines, seen from above (they dip toward the front: see `beltDropAt`). */
   innerWrap: Ellipse
   outerWrap: Ellipse
   width: number

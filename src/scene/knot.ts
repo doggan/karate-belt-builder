@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { WAIST_Y, type Ellipse } from './beltLayout'
+import { beltDropAt, WAIST_Y, type Ellipse } from './beltLayout'
 import type { Frame, RibbonOptions } from './ribbon'
 import { StrandPath, arcLengths } from './strand'
 import { tailRootFrame } from './tailShape'
@@ -90,7 +90,8 @@ const EXIT_STEPS = 20
 
 /**
  * Maps knot space onto the waist: x becomes distance around the wrap's center line
- * (an ellipse), z distance out from its front surface.
+ * (an ellipse), z distance out from its front surface, and y follows the wrap down to the
+ * bottom of its U at the front (level there, so the knot isn't bent).
  */
 function waistBend(wrap: Ellipse, thickness: number) {
   const { a, b } = wrap
@@ -123,7 +124,7 @@ function waistBend(wrap: Ellipse, thickness: number) {
     const angle = angleAt(v.x)
     const yaw = Math.atan2(b * Math.sin(angle), a * Math.cos(angle))
     const reach = thickness / 2 + v.z
-    return v.set(a * Math.sin(angle) + Math.sin(yaw) * reach, WAIST_Y - 0.0015 + v.y, b * Math.cos(angle) + Math.cos(yaw) * reach)
+    return v.set(a * Math.sin(angle) + Math.sin(yaw) * reach, WAIST_Y - 0.0015 - beltDropAt(angle, a) + v.y, b * Math.cos(angle) + Math.cos(yaw) * reach)
   }
   return { point, yawAt, turn }
 }
