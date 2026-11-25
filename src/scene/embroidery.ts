@@ -26,6 +26,8 @@ const LABEL_ASPECT = LABEL_LENGTH / (0.04 * LABEL_WIDTH_FRACTION)
 /** Stripes start this far from the tip (m), or this far past the brand label when it's on the same tail. */
 const STRIPES_FROM_TIP = 0.01
 const STRIPES_PAST_LABEL = 0.015
+/** On a tail with neither a label nor stripes, the text starts this far from the tip (m). */
+const TEXT_FROM_BARE_TIP = 0.04
 
 /** Where things go at the end of a tail, as distances from its tip (m). */
 export interface TailEndLayout {
@@ -46,7 +48,7 @@ export function tailEndLayout(width: number, logo: boolean, stripes: number): Ta
   const pitch = w + STRIPE_GAP_CM / 100
   const first = logo ? labelTop + STRIPES_PAST_LABEL : STRIPES_FROM_TIP
   const bands = Array.from({ length: stripes }, (_, i) => ({ near: first + i * pitch, far: first + i * pitch + w }))
-  const textFromTip = bands.length ? bands[bands.length - 1].far + gap : logo ? labelTop + gap : LABEL_END_MARGIN
+  const textFromTip = bands.length ? bands[bands.length - 1].far + gap : logo ? labelTop + gap : TEXT_FROM_BARE_TIP
   return { stripes: bands, textFromTip }
 }
 
